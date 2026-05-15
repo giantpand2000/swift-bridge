@@ -22,7 +22,7 @@ use syn::{
 };
 
 mod argument_attributes;
-mod function_attributes;
+pub(super) mod function_attributes;
 mod generics;
 mod opaque_type_attributes;
 

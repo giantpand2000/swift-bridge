@@ -4,7 +4,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Path, Token};
 
 #[derive(Default)]
-pub(super) struct FunctionAttributes {
+pub(in crate::parse) struct FunctionAttributes {
     pub associated_to: Option<Ident>,
     pub is_swift_initializer: bool,
     pub is_swift_identifiable: bool,
@@ -41,7 +41,7 @@ impl FunctionAttributes {
         }
     }
 
-    pub fn store_attrib(&mut self, attrib: FunctionAttr) {
+    fn store_attrib(&mut self, attrib: FunctionAttr) {
         match attrib {
             FunctionAttr::AssociatedTo(ident) => {
                 self.associated_to = Some(ident);

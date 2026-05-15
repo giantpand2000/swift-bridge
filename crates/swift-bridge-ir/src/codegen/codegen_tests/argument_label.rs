@@ -329,3 +329,55 @@ func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ a
         .test();
     }
 }
+
+/// Verify that Swift-style `func` declarations can use `rust_name` to control the generated
+/// Rust API name while still calling the original Swift function name.
+mod extern_swift_func_syntax_rust_name {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            #[swift_bridge::bridge]
+            mod ffi {
+                extern "Swift" {
+                    #[swift_bridge(rust_name = "call_custom")]
+                    func callCustom(_ value: i32, forKey key: u32);
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::Contains(quote! {
+            pub fn call_custom(value: i32, key: u32) {
+                unsafe { __swift_bridge__call_custom(value, key) }
+            }
+        })
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+@_cdecl("__swift_bridge__$call_custom")
+func __swift_bridge__call_custom (_ value: Int32, forKey key: UInt32) {
+    callCustom(value, forKey: key)
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ExactAfterTrim(r#""#)
+    }
+
+    #[test]
+    fn extern_swift_func_syntax_rust_name() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}

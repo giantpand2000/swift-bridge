@@ -138,10 +138,6 @@ impl Parse for SwiftBridgeModuleAndErrors {
 }
 
 fn parse_bridge_module_item_mod(input: ParseStream) -> syn::Result<ItemMod> {
-    if input.fork().parse::<ItemMod>().is_ok() {
-        return input.parse();
-    }
-
     let tokens: proc_macro2::TokenStream = input.parse()?;
     let tokens = normalize_swift_function_syntax(tokens)?;
     syn::parse2::<ItemMod>(tokens.clone())
