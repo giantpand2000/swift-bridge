@@ -98,7 +98,7 @@ impl<'a> ForeignModParser<'a> {
                     let mut attributes = FunctionAttributes::default();
 
                     for attr in func.attrs.iter() {
-                        attributes = attr.parse_args()?;
+                        attributes.merge(attr.parse_args()?);
                     }
 
                     for arg in func.sig.inputs.iter() {

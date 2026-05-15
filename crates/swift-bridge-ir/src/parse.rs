@@ -4,6 +4,7 @@ use crate::errors::{ParseError, ParseErrors};
 use crate::parse::parse_enum::SharedEnumDeclarationParser;
 use crate::parse::parse_extern_mod::ForeignModParser;
 use crate::parse::parse_struct::SharedStructDeclarationParser;
+use crate::parse::swift_function_syntax::normalize_swift_function_syntax;
 use crate::SwiftBridgeModule;
 use proc_macro2::TokenTree;
 use quote::{quote, ToTokens};
@@ -13,6 +14,7 @@ use syn::{Item, ItemMod, Token};
 mod parse_enum;
 mod parse_extern_mod;
 mod parse_struct;
+mod swift_function_syntax;
 
 mod type_declarations;
 pub(crate) use self::type_declarations::*;
@@ -54,92 +56,96 @@ impl HostLang {
 impl Parse for SwiftBridgeModuleAndErrors {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut errors = ParseErrors::new();
+        let item_mod = parse_bridge_module_item_mod(input)?;
+        let module_name = item_mod.ident;
+        let vis = item_mod.vis;
 
-        if let Ok(item_mod) = input.parse::<ItemMod>() {
-            let module_name = item_mod.ident;
-            let vis = item_mod.vis;
+        let mut functions = vec![];
+        let mut type_declarations = TypeDeclarations::default();
+        let mut unresolved_types = vec![];
+        let mut cfg_attrs = vec![];
 
-            let mut functions = vec![];
-            let mut type_declarations = TypeDeclarations::default();
-            let mut unresolved_types = vec![];
-            let mut cfg_attrs = vec![];
-
-            for attr in item_mod.attrs {
-                match attr.path.to_token_stream().to_string().as_str() {
-                    "cfg" => {
-                        let cfg: CfgAttr = syn::parse2(attr.tokens)?;
-                        cfg_attrs.push(cfg);
-                    }
-                    _ => {}
-                };
-            }
-
-            for outer_mod_item in item_mod.content.unwrap().1 {
-                match outer_mod_item {
-                    Item::ForeignMod(foreign_mod) => {
-                        ForeignModParser {
-                            errors: &mut errors,
-                            type_declarations: &mut type_declarations,
-                            functions: &mut functions,
-                            unresolved_types: &mut unresolved_types,
-                        }
-                        .parse(foreign_mod)?;
-                    }
-                    Item::Struct(item_struct) => {
-                        let shared_struct = SharedStructDeclarationParser {
-                            item_struct,
-                            errors: &mut errors,
-                        }
-                        .parse()?;
-                        type_declarations.insert(
-                            shared_struct.name.to_string(),
-                            TypeDeclaration::Shared(SharedTypeDeclaration::Struct(shared_struct)),
-                        );
-                    }
-                    Item::Enum(item_enum) => {
-                        let shared_enum = SharedEnumDeclarationParser {
-                            item_enum,
-                            errors: &mut errors,
-                        }
-                        .parse()?;
-                        type_declarations.insert(
-                            shared_enum.name.to_string(),
-                            TypeDeclaration::Shared(SharedTypeDeclaration::Enum(shared_enum)),
-                        );
-                    }
-                    invalid_item => {
-                        let error = ParseError::InvalidModuleItem { item: invalid_item };
-                        errors.push(error);
-                    }
-                };
-            }
-
-            for unresolved_type in unresolved_types.into_iter() {
-                if BridgedType::new_with_type(&unresolved_type, &type_declarations).is_some() {
-                    continue;
+        for attr in item_mod.attrs {
+            match attr.path.to_token_stream().to_string().as_str() {
+                "cfg" => {
+                    let cfg: CfgAttr = syn::parse2(attr.tokens)?;
+                    cfg_attrs.push(cfg);
                 }
+                _ => {}
+            };
+        }
 
-                errors.push(ParseError::UndeclaredType {
-                    ty: unresolved_type.clone(),
-                });
+        for outer_mod_item in item_mod.content.unwrap().1 {
+            match outer_mod_item {
+                Item::ForeignMod(foreign_mod) => {
+                    ForeignModParser {
+                        errors: &mut errors,
+                        type_declarations: &mut type_declarations,
+                        functions: &mut functions,
+                        unresolved_types: &mut unresolved_types,
+                    }
+                    .parse(foreign_mod)?;
+                }
+                Item::Struct(item_struct) => {
+                    let shared_struct = SharedStructDeclarationParser {
+                        item_struct,
+                        errors: &mut errors,
+                    }
+                    .parse()?;
+                    type_declarations.insert(
+                        shared_struct.name.to_string(),
+                        TypeDeclaration::Shared(SharedTypeDeclaration::Struct(shared_struct)),
+                    );
+                }
+                Item::Enum(item_enum) => {
+                    let shared_enum = SharedEnumDeclarationParser {
+                        item_enum,
+                        errors: &mut errors,
+                    }
+                    .parse()?;
+                    type_declarations.insert(
+                        shared_enum.name.to_string(),
+                        TypeDeclaration::Shared(SharedTypeDeclaration::Enum(shared_enum)),
+                    );
+                }
+                invalid_item => {
+                    let error = ParseError::InvalidModuleItem { item: invalid_item };
+                    errors.push(error);
+                }
+            };
+        }
+
+        for unresolved_type in unresolved_types.into_iter() {
+            if BridgedType::new_with_type(&unresolved_type, &type_declarations).is_some() {
+                continue;
             }
 
-            let module = SwiftBridgeModule {
-                name: module_name,
-                vis,
-                types: type_declarations,
-                functions,
-                swift_bridge_path: syn::parse2(quote! { swift_bridge }).unwrap(),
-                cfg_attrs,
-            };
-            Ok(SwiftBridgeModuleAndErrors { module, errors })
-        } else {
-            return Err(syn::Error::new_spanned(
-                input.to_string(),
-                "Only modules are supported.",
-            ));
+            errors.push(ParseError::UndeclaredType {
+                ty: unresolved_type.clone(),
+            });
         }
+
+        let module = SwiftBridgeModule {
+            name: module_name,
+            vis,
+            types: type_declarations,
+            functions,
+            swift_bridge_path: syn::parse2(quote! { swift_bridge }).unwrap(),
+            cfg_attrs,
+        };
+        Ok(SwiftBridgeModuleAndErrors { module, errors })
     }
+}
+
+fn parse_bridge_module_item_mod(input: ParseStream) -> syn::Result<ItemMod> {
+    if input.fork().parse::<ItemMod>().is_ok() {
+        return input.parse();
+    }
+
+    let tokens: proc_macro2::TokenStream = input.parse()?;
+    let tokens = normalize_swift_function_syntax(tokens)?;
+    syn::parse2::<ItemMod>(tokens.clone())
+        .map_err(|_| syn::Error::new_spanned(tokens, "Only modules are supported."))
 }
 
 // Used to fast-forward our attribute parsing to the next attribute when we've run into an

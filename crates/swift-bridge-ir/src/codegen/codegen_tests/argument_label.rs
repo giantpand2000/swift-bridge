@@ -278,3 +278,54 @@ func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ a
         .test();
     }
 }
+
+/// Verify that Swift-style `func` declarations in extern "Swift" blocks are normalized into
+/// Rust-style generated APIs while preserving Swift argument labels.
+mod extern_swift_func_syntax {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            #[swift_bridge::bridge]
+            mod ffi {
+                extern "Swift" {
+                    func someFunction(_ arg1: i32, customLabel arg2: u32, arg3: i64);
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::Contains(quote! {
+            pub fn some_function(arg1: i32, arg2: u32, arg3: i64) {
+                unsafe { __swift_bridge__some_function(arg1, arg2, arg3) }
+            }
+        })
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+@_cdecl("__swift_bridge__$some_function")
+func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ arg3: Int64) {
+    someFunction(arg1, customLabel: arg2, arg3: arg3)
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ExactAfterTrim(r#""#)
+    }
+
+    #[test]
+    fn extern_swift_func_syntax() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}

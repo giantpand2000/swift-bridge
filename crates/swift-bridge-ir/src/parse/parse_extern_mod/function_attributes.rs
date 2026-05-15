@@ -17,6 +17,30 @@ pub(super) struct FunctionAttributes {
 }
 
 impl FunctionAttributes {
+    pub fn merge(&mut self, other: FunctionAttributes) {
+        if other.associated_to.is_some() {
+            self.associated_to = other.associated_to;
+        }
+        self.is_swift_initializer |= other.is_swift_initializer;
+        self.is_swift_identifiable |= other.is_swift_identifiable;
+        if other.rust_name.is_some() {
+            self.rust_name = other.rust_name;
+        }
+        if other.swift_name.is_some() {
+            self.swift_name = other.swift_name;
+        }
+        self.return_into |= other.return_into;
+        if other.return_with.is_some() {
+            self.return_with = other.return_with;
+        }
+        if other.args_into.is_some() {
+            self.args_into = other.args_into;
+        }
+        if other.get_field.is_some() {
+            self.get_field = other.get_field;
+        }
+    }
+
     pub fn store_attrib(&mut self, attrib: FunctionAttr) {
         match attrib {
             FunctionAttr::AssociatedTo(ident) => {
