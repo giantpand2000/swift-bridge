@@ -259,10 +259,9 @@ pub(crate) struct SharedStruct {
     pub derives: StructDerives,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct StructDerives {
-    pub copy: bool,
-    pub clone: bool,
+    pub tokens: Vec<TokenStream>,
 }
 
 impl SharedStruct {

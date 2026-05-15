@@ -33,15 +33,6 @@ struct StructAttribs {
     derives: StructDerives,
 }
 
-impl Default for StructDerives {
-    fn default() -> Self {
-        StructDerives {
-            copy: false,
-            clone: false,
-        }
-    }
-}
-
 struct ParsedAttribs(Vec<StructAttr>);
 impl Parse for ParsedAttribs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -130,11 +121,7 @@ impl<'a> SharedStructDeclarationParser<'a> {
                 "derive" => match attr.parse_meta()? {
                     Meta::List(meta_list) => {
                         for derive in meta_list.nested {
-                            match derive.to_token_stream().to_string().as_str() {
-                                "Copy" => attribs.derives.copy = true,
-                                "Clone" => attribs.derives.clone = true,
-                                _ => {}
-                            }
+                            attribs.derives.tokens.push(derive.to_token_stream());
                         }
                     }
                     _ => todo!("Push parse error that derive attribute is in incorrect format"),
@@ -348,10 +335,10 @@ mod tests {
         let tokens = quote! {
             #[swift_bridge::bridge]
             mod ffi {
-                #[derive(Copy, Clone)]
+                #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, serde::Serialize)]
                 struct Foo;
 
-                #[derive(Clone)]
+                #[derive(Clone, PartialEq, Hash, serde::Deserialize)]
                 struct Bar;
             }
         };
@@ -359,14 +346,27 @@ mod tests {
         let module = parse_ok(tokens);
 
         let ty = module.types.types()[0].unwrap_shared_struct();
-
-        assert_eq!(ty.derives.copy, true);
-        assert_eq!(ty.derives.clone, true);
+        assert_eq!(
+            derive_tokens(&ty.derives),
+            vec![
+                "Debug",
+                "Copy",
+                "Clone",
+                "PartialEq",
+                "Eq",
+                "PartialOrd",
+                "Ord",
+                "Hash",
+                "Default",
+                "serde :: Serialize"
+            ]
+        );
 
         let ty2 = module.types.types()[1].unwrap_shared_struct();
-
-        assert_eq!(ty2.derives.copy, false);
-        assert_eq!(ty2.derives.clone, true);
+        assert_eq!(
+            derive_tokens(&ty2.derives),
+            vec!["Clone", "PartialEq", "Hash", "serde :: Deserialize"]
+        );
     }
 
     /// Verify that we properly parse multiple comma separated struct attributes.
@@ -408,8 +408,7 @@ mod tests {
         let ty = module.types.types()[0].unwrap_shared_struct();
         assert_eq!(ty.swift_name.as_ref().unwrap().value(), "FfiFoo");
         assert_eq!(ty.swift_repr, StructSwiftRepr::Class);
-        assert_eq!(ty.derives.copy, true);
-        assert_eq!(ty.derives.clone, true);
+        assert_eq!(derive_tokens(&ty.derives), vec!["Copy", "Clone"]);
     }
 
     /// Verify that we can parse an `already_defined = "struct"` attribute.
@@ -456,5 +455,13 @@ mod tests {
             }
             _ => panic!(),
         };
+    }
+
+    fn derive_tokens(derives: &StructDerives) -> Vec<String> {
+        derives
+            .tokens
+            .iter()
+            .map(|derive| derive.to_string())
+            .collect()
     }
 }

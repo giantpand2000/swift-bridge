@@ -25,4 +25,10 @@ mod ffi {
     struct StructDeriveClone3 {
         field: String,
     }
+
+    #[swift_bridge(swift_repr = "struct")]
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    struct StructDeriveStandardTraits {
+        field: u8,
+    }
 }
