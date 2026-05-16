@@ -253,7 +253,7 @@ impl SwiftFnMetadata {
 /// `Unmanaged<TypeName>.fromOpaque(this).takeUnretainedValue().fn_name(args)`
 ///
 /// For static methods:
-/// `TypeName::fn_name(args)`
+/// `TypeName.fn_name(args)`
 ///
 /// For freestanding functions:
 /// `fn_name(args)`
@@ -267,7 +267,7 @@ fn build_swift_call_expression(func: &ParsedExternFn, fn_name: &str, args: &str)
         if func.is_method() {
             format!("Unmanaged<{ty_name}>.fromOpaque(this).takeUnretainedValue().{fn_name}({args})")
         } else {
-            format!("{ty_name}::{fn_name}({args})")
+            format!("{ty_name}.{fn_name}({args})")
         }
     } else {
         format!("{fn_name}({args})")
@@ -580,7 +580,7 @@ fn gen_sync_function_exposes_swift_to_rust(
             } else if func.is_swift_initializer {
                 call_fn = format!("Unmanaged.passRetained({}({})).toOpaque()", ty_name, args);
             } else {
-                call_fn = format!("{}::{}", ty_name, call_fn);
+                call_fn = format!("{}.{}", ty_name, call_fn);
             }
         } else {
             call_fn = built_in.convert_swift_expression_to_ffi_type(
@@ -730,7 +730,7 @@ fn gen_sync_result_function_exposes_swift_to_rust(
         if func.is_method() {
             format!("Unmanaged<{ty_name}>.fromOpaque(this).takeUnretainedValue().{fn_name}({args})")
         } else {
-            format!("{ty_name}::{fn_name}({args})")
+            format!("{ty_name}.{fn_name}({args})")
         }
     } else {
         format!("{fn_name}({args})")
@@ -1332,7 +1332,7 @@ extension FooRef {
         let expected = r#"
 @_cdecl("__swift_bridge__$Foo$bar")
 func __swift_bridge__Foo_bar (_ arg: UInt8) {
-    Foo::bar(arg: arg)
+    Foo.bar(arg: arg)
 }
 "#;
 
@@ -1504,6 +1504,32 @@ func some_function() -> Foo {
 @_cdecl("__swift_bridge__$some_function")
 func __swift_bridge__some_function () {
     someFunctionSwiftName()
+}
+"#;
+
+        assert_trimmed_generated_contains_trimmed_expected(&generated, &expected);
+    }
+
+    /// Verify that an extern Swift associated function calls Swift with class-method syntax.
+    #[test]
+    fn extern_swift_associated_function_uses_dot_call() {
+        let start = quote! {
+            mod foo {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(associated_to = Foo, swift_name = "bar")]
+                    fn bar(value: i64);
+                }
+            }
+        };
+        let module: SwiftBridgeModule = syn::parse2(start).unwrap();
+        let generated = module.generate_swift(&CodegenConfig::no_features_enabled());
+
+        let expected = r#"
+@_cdecl("__swift_bridge__$Foo$bar")
+func __swift_bridge__Foo_bar (_ value: Int64) {
+    Foo.bar(value: value)
 }
 "#;
 

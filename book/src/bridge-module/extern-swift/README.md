@@ -14,10 +14,10 @@ mod ffi {
     }
 }
 
-fn configure() {
-    ffi::set_volume(80, 2);
+fn configure(engine: &ffi::AudioEngine) {
+    engine.set_volume(80, 2);
 
-    if ffi::load_url(42) {
+    if engine.load_url(42) {
         // ...
     }
 }
@@ -26,12 +26,14 @@ fn configure() {
 The Swift implementation keeps its Swift spelling and labels:
 
 ```swift
-func setVolume(_ value: UInt32, forChannel channel: UInt32) {
-    // ...
-}
+class AudioEngine {
+    func setVolume(_ value: UInt32, forChannel channel: UInt32) {
+        // ...
+    }
 
-func loadURL(_ urlID: UInt32) -> Bool {
-    // ...
+    func loadURL(_ urlID: UInt32) -> Bool {
+        // ...
+    }
 }
 ```
 
@@ -40,13 +42,16 @@ func loadURL(_ urlID: UInt32) -> Bool {
 Swift-style declarations are written with `func!(...)` inside `extern "Swift"`.
 The macro-like spelling is intentional: Rust must accept the bridge module's
 tokens before `swift-bridge` can normalize the declaration into a Rust foreign
-function signature.
+function signature. If the `extern "Swift"` block declares exactly one type,
+`func!(...)` is associated with that type as an instance method.
 
 ```rust
 #[swift_bridge::bridge]
 mod ffi {
     extern "Swift" {
-        func!(setValue(_ value: Int32, forKey key: UInt32, limit: UInt32));
+        type Foo;
+
+        func!(bar(_ value: Int32, forKey key: UInt32, limit: UInt32));
     }
 }
 ```
@@ -54,13 +59,13 @@ mod ffi {
 This generates a Rust API shaped like:
 
 ```rust
-ffi::set_value(value, key, limit);
+foo.bar(value, key, limit);
 ```
 
 and calls Swift as:
 
 ```swift
-setValue(value, forKey: key, limit: limit)
+foo.bar(value, forKey: key, limit: limit)
 ```
 
 Parameter labels follow Swift's spelling:
@@ -72,7 +77,34 @@ Parameter labels follow Swift's spelling:
 - `limit: T` uses the same name for the Swift label and the Rust parameter.
 
 Function names and parameter names are converted to Rust `snake_case`.
-For example, `loadURL(_ urlID: UInt32)` becomes `ffi::load_url(url_id)`.
+For example, `loadURL(_ urlID: UInt32)` becomes `load_url(url_id)`.
+
+Use `static_func!(...)` for a Swift class method. It is equivalent to writing
+`#[swift_bridge(associated_to = Type, swift_name = "...")]` on the generated
+Rust-style declaration when the extern block declares one type.
+
+```rust
+#[swift_bridge::bridge]
+mod ffi {
+    extern "Swift" {
+        type Foo;
+
+        static_func!(bar(_ value: Int64));
+    }
+}
+```
+
+This generates an associated Rust function:
+
+```rust
+ffi::Foo::bar(value);
+```
+
+and calls Swift as:
+
+```swift
+Foo.bar(value)
+```
 
 Type names in Swift-style declarations can use either `swift-bridge`'s
 Rust-side spelling or the supported Swift-side spelling. Swift spellings are

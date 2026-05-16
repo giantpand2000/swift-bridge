@@ -381,3 +381,124 @@ func __swift_bridge__call_custom (_ value: Int32, forKey key: UInt32) {
         .test();
     }
 }
+
+/// Verify that Swift-style `func!` declarations bind to the sole Swift type in the extern block
+/// as instance methods.
+mod extern_swift_func_syntax_instance_method {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            #[swift_bridge::bridge]
+            mod ffi {
+                extern "Swift" {
+                    type Foo;
+
+                    func!(bar(_ value: Int64));
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                impl Foo {
+                    pub fn bar(&self, value: i64) {
+                        unsafe { __swift_bridge__Foo_bar(swift_bridge::PointerToSwiftType(self.0), value) }
+                    }
+                }
+            },
+            quote! {
+                #[link_name = "__swift_bridge__$Foo$bar"]
+                fn __swift_bridge__Foo_bar(this: swift_bridge::PointerToSwiftType, value: i64);
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+@_cdecl("__swift_bridge__$Foo$bar")
+func __swift_bridge__Foo_bar (_ this: UnsafeMutableRawPointer, _ value: Int64) {
+    Unmanaged<Foo>.fromOpaque(this).takeUnretainedValue().bar(value)
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ExactAfterTrim(r#""#)
+    }
+
+    #[test]
+    fn extern_swift_func_syntax_instance_method() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify that `static_func!` binds to the sole Swift type in the extern block as a class method.
+mod extern_swift_static_func_syntax {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            #[swift_bridge::bridge]
+            mod ffi {
+                extern "Swift" {
+                    type Foo;
+
+                    static_func!(bar(_ value: Int64));
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                impl Foo {
+                    pub fn bar(value: i64) {
+                        unsafe { __swift_bridge__Foo_bar(value) }
+                    }
+                }
+            },
+            quote! {
+                #[link_name = "__swift_bridge__$Foo$bar"]
+                fn __swift_bridge__Foo_bar(value: i64);
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+@_cdecl("__swift_bridge__$Foo$bar")
+func __swift_bridge__Foo_bar (_ value: Int64) {
+    Foo.bar(value)
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ExactAfterTrim(r#""#)
+    }
+
+    #[test]
+    fn extern_swift_static_func_syntax() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}

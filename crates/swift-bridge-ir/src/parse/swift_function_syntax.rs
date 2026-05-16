@@ -85,13 +85,15 @@ fn normalize_extern_swift_items(tokens: TokenStream) -> syn::Result<(TokenStream
     let mut current_item = TokenStream::new();
     let mut changed = false;
     let mut generated_rust_names = HashMap::new();
+    let context = ExternSwiftContext::from_tokens(tokens.clone());
 
     for token in tokens {
         let is_semi = token_is_punct(&token, ';');
         current_item.extend([token]);
 
         if is_semi {
-            let (item, item_changed, rust_name) = normalize_extern_swift_item(current_item)?;
+            let (item, item_changed, rust_name) =
+                normalize_extern_swift_item(current_item, &context)?;
             if let Some(rust_name) = rust_name {
                 track_generated_rust_name(&mut generated_rust_names, &rust_name)?;
             }
@@ -102,7 +104,7 @@ fn normalize_extern_swift_items(tokens: TokenStream) -> syn::Result<(TokenStream
     }
 
     if !current_item.is_empty() {
-        let (item, item_changed, rust_name) = normalize_extern_swift_item(current_item)?;
+        let (item, item_changed, rust_name) = normalize_extern_swift_item(current_item, &context)?;
         if let Some(rust_name) = rust_name {
             track_generated_rust_name(&mut generated_rust_names, &rust_name)?;
         }
@@ -115,6 +117,7 @@ fn normalize_extern_swift_items(tokens: TokenStream) -> syn::Result<(TokenStream
 
 fn normalize_extern_swift_item(
     tokens: TokenStream,
+    context: &ExternSwiftContext,
 ) -> syn::Result<(TokenStream, bool, Option<Ident>)> {
     if tokens.is_empty() {
         return Ok((tokens, false, None));
@@ -124,7 +127,7 @@ fn normalize_extern_swift_item(
         Ok(swift_func) => {
             let rust_name = swift_func.rust_fn_name()?;
             Ok((
-                swift_func.to_rust_foreign_fn(&rust_name),
+                swift_func.to_rust_foreign_fn(&rust_name, context)?,
                 true,
                 Some(rust_name),
             ))
@@ -165,7 +168,7 @@ fn track_generated_rust_name(
         let mut err = syn::Error::new_spanned(
             rust_name,
             format!(
-                "multiple Swift `func` declarations generate the Rust function name `{}`; add `#[swift_bridge(rust_name = \"...\")]` to one of them",
+                "multiple Swift `func` or `static_func` declarations generate the Rust function name `{}`; add `#[swift_bridge(rust_name = \"...\")]` to one of them",
                 rust_name_string
             ),
         );
@@ -183,7 +186,7 @@ fn track_generated_rust_name(
 
 fn is_probably_swift_func(tokens: &TokenStream) -> bool {
     tokens.clone().into_iter().any(|token| match token {
-        TokenTree::Ident(ident) => ident == "func",
+        TokenTree::Ident(ident) => ident == "func" || ident == "static_func",
         _ => false,
     })
 }
@@ -192,7 +195,7 @@ fn is_probably_swift_func_macro(tokens: &TokenStream) -> bool {
     let mut iter = tokens.clone().into_iter().peekable();
 
     while let Some(token) = iter.next() {
-        if token_is_ident(&token, "func") {
+        if token_is_ident(&token, "func") || token_is_ident(&token, "static_func") {
             return iter
                 .peek()
                 .map(|token| token_is_punct(token, '!'))
@@ -223,6 +226,54 @@ fn literal_is_swift(literal: &Literal) -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Default)]
+struct ExternSwiftContext {
+    type_name: Option<Ident>,
+    type_count: usize,
+}
+
+impl ExternSwiftContext {
+    fn from_tokens(tokens: TokenStream) -> Self {
+        let mut context = Self::default();
+        let mut current_item = TokenStream::new();
+
+        for token in tokens {
+            let is_semi = token_is_punct(&token, ';');
+            current_item.extend([token]);
+
+            if is_semi {
+                context.record_type_item(current_item);
+                current_item = TokenStream::new();
+            }
+        }
+
+        if !current_item.is_empty() {
+            context.record_type_item(current_item);
+        }
+
+        context
+    }
+
+    fn record_type_item(&mut self, item: TokenStream) {
+        if let Ok(type_item) = syn::parse2::<syn::ForeignItemType>(item) {
+            self.type_count += 1;
+            if self.type_count == 1 {
+                self.type_name = Some(type_item.ident);
+            } else {
+                self.type_name = None;
+            }
+        }
+    }
+
+    fn single_type_name(&self) -> Option<&Ident> {
+        if self.type_count == 1 {
+            self.type_name.as_ref()
+        } else {
+            None
+        }
+    }
+}
+
 struct SwiftFunc {
     attrs: Vec<Attribute>,
     vis: Visibility,
@@ -231,6 +282,13 @@ struct SwiftFunc {
     params: Vec<SwiftFuncParam>,
     trailing_asyncness: Option<Token![async]>,
     output: ReturnType,
+    kind: SwiftFuncKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SwiftFuncKind {
+    InstanceOrFreestanding,
+    Static,
 }
 
 impl SwiftFunc {
@@ -262,19 +320,70 @@ impl SwiftFunc {
         Ok(rust_name)
     }
 
-    fn to_rust_foreign_fn(&self, rust_name: &Ident) -> TokenStream {
+    fn to_rust_foreign_fn(
+        &self,
+        rust_name: &Ident,
+        context: &ExternSwiftContext,
+    ) -> syn::Result<TokenStream> {
         let attrs = &self.attrs;
         let vis = &self.vis;
         let swift_name = LitStr::new(&self.swift_name.to_string(), self.swift_name.span());
         let asyncness = self.leading_asyncness.or(self.trailing_asyncness);
-        let params = self.params.iter().map(SwiftFuncParam::to_rust_param);
+        let mut params = Vec::new();
+        if self.should_infer_instance_receiver(context)? {
+            params.push(quote! { &self });
+        }
+        params.extend(self.params.iter().map(SwiftFuncParam::to_rust_param));
         let output = &self.output;
+        let associated_to = self.inferred_associated_to(context)?;
 
-        quote! {
+        Ok(quote! {
             #[swift_bridge(swift_name = #swift_name)]
+            #associated_to
             #(#attrs)*
             #vis #asyncness fn #rust_name(#(#params),*) #output;
+        })
+    }
+
+    fn should_infer_instance_receiver(&self, context: &ExternSwiftContext) -> syn::Result<bool> {
+        Ok(self.kind == SwiftFuncKind::InstanceOrFreestanding
+            && context.single_type_name().is_some()
+            && !self.has_associated_to_attr()?)
+    }
+
+    fn inferred_associated_to(
+        &self,
+        context: &ExternSwiftContext,
+    ) -> syn::Result<Option<TokenStream>> {
+        if self.kind != SwiftFuncKind::Static || self.has_associated_to_attr()? {
+            return Ok(None);
         }
+
+        let Some(type_name) = context.single_type_name() else {
+            return Err(syn::Error::new_spanned(
+                &self.swift_name,
+                "`static_func!` requires exactly one `type` declaration in the extern \"Swift\" block, or an explicit `#[swift_bridge(associated_to = Type)]` attribute",
+            ));
+        };
+
+        Ok(Some(quote! {
+            #[swift_bridge(associated_to = #type_name)]
+        }))
+    }
+
+    fn has_associated_to_attr(&self) -> syn::Result<bool> {
+        for attr in self
+            .attrs
+            .iter()
+            .filter(|attr| attr.path.is_ident("swift_bridge"))
+        {
+            let attrs: FunctionAttributes = attr.parse_args()?;
+            if attrs.associated_to.is_some() {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -300,7 +409,14 @@ impl Parse for SwiftFunc {
             ));
         }
 
-        Self::parse_signature(input, attrs, vis, leading_asyncness, true)
+        Self::parse_signature(
+            input,
+            attrs,
+            vis,
+            leading_asyncness,
+            true,
+            SwiftFuncKind::InstanceOrFreestanding,
+        )
     }
 }
 
@@ -311,6 +427,7 @@ impl SwiftFunc {
         vis: Visibility,
         leading_asyncness: Option<Token![async]>,
         parse_semi: bool,
+        kind: SwiftFuncKind,
     ) -> syn::Result<Self> {
         let swift_name = Ident::parse_any(input)?;
 
@@ -343,6 +460,7 @@ impl SwiftFunc {
             params,
             trailing_asyncness,
             output,
+            kind,
         })
     }
 }
@@ -357,19 +475,24 @@ impl Parse for SwiftFuncMacro {
         let vis: Visibility = input.parse()?;
 
         let func_token = Ident::parse_any(input)?;
-        if func_token != "func" {
-            return Err(syn::Error::new_spanned(
-                func_token,
-                r#"expected Swift function macro declaration starting with `func!`"#,
-            ));
-        }
+        let kind = match func_token.to_string().as_str() {
+            "func" => SwiftFuncKind::InstanceOrFreestanding,
+            "static_func" => SwiftFuncKind::Static,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    func_token,
+                    r#"expected Swift function macro declaration starting with `func!` or `static_func!`"#,
+                ))
+            }
+        };
 
         input.parse::<Token![!]>()?;
 
         let content;
         syn::parenthesized!(content in input);
         let leading_asyncness: Option<Token![async]> = content.parse()?;
-        let func = SwiftFunc::parse_signature(&content, attrs, vis, leading_asyncness, false)?;
+        let func =
+            SwiftFunc::parse_signature(&content, attrs, vis, leading_asyncness, false, kind)?;
         if !content.is_empty() {
             return Err(content.error("unexpected tokens in Swift function macro declaration"));
         }
@@ -810,6 +933,57 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_func_macro_to_instance_method_when_extern_swift_has_one_type() {
+        let tokens = quote! {
+            extern "Swift" {
+                type Foo;
+
+                func!(bar(_ value: Int64));
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(swift_name = "bar")]
+                    fn bar(&self, #[swift_bridge(label = "_")] value: i64);
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn normalizes_static_func_macro_to_associated_function() {
+        let tokens = quote! {
+            extern "Swift" {
+                type Foo;
+
+                static_func!(bar(_ value: Int64));
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(swift_name = "bar")]
+                    #[swift_bridge(associated_to = Foo)]
+                    fn bar(#[swift_bridge(label = "_")] value: i64);
+                }
+            },
+        );
+    }
+
+    #[test]
     fn normalizes_swift_builtin_types_to_rust_types() {
         let tokens = quote! {
             extern "Swift" {
@@ -958,7 +1132,7 @@ mod tests {
         let err = err.to_string();
 
         assert!(err.contains(
-            "multiple Swift `func` declarations generate the Rust function name `load_url`"
+            "multiple Swift `func` or `static_func` declarations generate the Rust function name `load_url`"
         ));
     }
 
