@@ -9,8 +9,8 @@ mod ffi {
     extern "Swift" {
         type AudioEngine;
 
-        func!(setVolume(_ value: u32, forChannel channel: u32));
-        func!(loadURL(_ urlID: u32) -> bool);
+        func!(setVolume(_ value: UInt32, forChannel channel: UInt32));
+        func!(loadURL(_ urlID: UInt32) -> Bool);
     }
 }
 
@@ -46,7 +46,7 @@ function signature.
 #[swift_bridge::bridge]
 mod ffi {
     extern "Swift" {
-        func!(setValue(_ value: i32, forKey key: u32, limit: u32));
+        func!(setValue(_ value: Int32, forKey key: UInt32, limit: UInt32));
     }
 }
 ```
@@ -72,11 +72,26 @@ Parameter labels follow Swift's spelling:
 - `limit: T` uses the same name for the Swift label and the Rust parameter.
 
 Function names and parameter names are converted to Rust `snake_case`.
-For example, `loadURL(_ urlID: u32)` becomes `ffi::load_url(url_id)`.
+For example, `loadURL(_ urlID: UInt32)` becomes `ffi::load_url(url_id)`.
 
-The type names in the declaration still use `swift-bridge`'s Rust-side type
-spelling, such as `i32`, `u32`, `String`, `Option<T>`, and bridge module types.
-Do not write Swift type spellings such as `Int32` in the bridge module.
+Type names in Swift-style declarations can use either `swift-bridge`'s
+Rust-side spelling or the supported Swift-side spelling. Swift spellings are
+normalized before the bridge module is parsed as Rust.
+
+| Swift-style spelling | Rust spelling |
+| --- | --- |
+| `UInt8`, `Int8`, `UInt16`, `Int16`, `UInt32`, `Int32`, `UInt64`, `Int64` | `u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64` |
+| `UInt`, `Int` | `usize`, `isize` |
+| `Float`, `Double`, `Bool`, `Void` | `f32`, `f64`, `bool`, `()` |
+| `Optional<T>` | `Option<T>` |
+| `RustVec<T>` | `Vec<T>` |
+| `RustResult<T, E>` | `Result<T, E>` |
+| `UnsafePointer<T>`, `UnsafeMutablePointer<T>` | `*const T`, `*mut T` |
+| `UnsafeRawPointer`, `UnsafeMutableRawPointer` | `*const std::ffi::c_void`, `*mut std::ffi::c_void` |
+| `RustString`, `RustStringRef`, `RustStringRefMut`, `RustStr` | `String`, `&String`, `&mut String`, `&str` |
+
+Plain `String` is also accepted and keeps the existing `swift-bridge` string
+behavior.
 
 ## Naming overrides
 
@@ -87,10 +102,10 @@ reports an error and asks for an explicit Rust name.
 #[swift_bridge::bridge]
 mod ffi {
     extern "Swift" {
-        func!(loadURL(_ id: u32) -> bool);
+        func!(loadURL(_ id: UInt32) -> Bool);
 
         #[swift_bridge(rust_name = "load_url_from_string")]
-        func!(loadUrl(_ id: u32) -> bool);
+        func!(loadUrl(_ id: UInt32) -> Bool);
     }
 }
 ```
@@ -111,8 +126,8 @@ Swift-style declarations can include `async`:
 #[swift_bridge::bridge]
 mod ffi {
     extern "Swift" {
-        func!(async fetchUserCount() -> u32);
-        func!(fetchIsEnabled() async -> bool);
+        func!(async fetchUserCount() -> UInt32);
+        func!(fetchIsEnabled() async -> Bool);
     }
 }
 ```

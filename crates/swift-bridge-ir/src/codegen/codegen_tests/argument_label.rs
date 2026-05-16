@@ -289,7 +289,7 @@ mod extern_swift_func_syntax {
             #[swift_bridge::bridge]
             mod ffi {
                 extern "Swift" {
-                    func someFunction(_ arg1: i32, customLabel arg2: u32, arg3: i64);
+                    func someFunction(_ arg1: Int32, customLabel arg2: UInt32, arg3: Int64);
                 }
             }
         }
@@ -341,7 +341,7 @@ mod extern_swift_func_syntax_rust_name {
             mod ffi {
                 extern "Swift" {
                     #[swift_bridge(rust_name = "call_custom")]
-                    func callCustom(_ value: i32, forKey key: u32);
+                    func callCustom(_ value: Int32, forKey key: UInt32);
                 }
             }
         }

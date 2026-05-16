@@ -4,7 +4,10 @@ use quote::quote;
 use std::collections::HashMap;
 use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
-use syn::{Attribute, LitStr, ReturnType, Token, Type, Visibility};
+use syn::{
+    AngleBracketedGenericArguments, Attribute, GenericArgument, LitStr, PathArguments, ReturnType,
+    Token, Type, TypePath, Visibility,
+};
 
 pub(super) fn normalize_swift_function_syntax(tokens: TokenStream) -> syn::Result<TokenStream> {
     let (tokens, _) = normalize_token_stream(tokens)?;
@@ -327,6 +330,7 @@ impl SwiftFunc {
         }
 
         let output: ReturnType = input.parse()?;
+        let output = normalize_swift_return_type(output)?;
         if parse_semi {
             input.parse::<Token![;]>()?;
         }
@@ -431,7 +435,7 @@ impl Parse for SwiftFuncParam {
                 attrs,
                 label: SwiftFuncParamLabel::Default,
                 local_name,
-                ty: input.parse()?,
+                ty: parse_swift_type(input)?,
             });
         }
 
@@ -449,9 +453,203 @@ impl Parse for SwiftFuncParam {
             attrs,
             label,
             local_name,
-            ty: input.parse()?,
+            ty: parse_swift_type(input)?,
         })
     }
+}
+
+fn parse_swift_type(input: ParseStream) -> syn::Result<Type> {
+    let ty: Type = input.parse()?;
+    normalize_swift_type(&ty)
+}
+
+fn normalize_swift_return_type(output: ReturnType) -> syn::Result<ReturnType> {
+    match output {
+        ReturnType::Default => Ok(ReturnType::Default),
+        ReturnType::Type(arrow, ty) => Ok(ReturnType::Type(
+            arrow,
+            Box::new(normalize_swift_type(&ty)?),
+        )),
+    }
+}
+
+fn normalize_swift_type(ty: &Type) -> syn::Result<Type> {
+    match ty {
+        Type::Path(type_path) => normalize_swift_type_path(type_path),
+        Type::Tuple(tuple) => {
+            let mut tuple = tuple.clone();
+            for elem in tuple.elems.iter_mut() {
+                *elem = normalize_swift_type(elem)?;
+            }
+            Ok(Type::Tuple(tuple))
+        }
+        Type::Reference(reference) => {
+            let mut reference = reference.clone();
+            reference.elem = Box::new(normalize_swift_type(&reference.elem)?);
+            Ok(Type::Reference(reference))
+        }
+        Type::Ptr(ptr) => {
+            let mut ptr = ptr.clone();
+            ptr.elem = Box::new(normalize_swift_type(&ptr.elem)?);
+            Ok(Type::Ptr(ptr))
+        }
+        Type::Paren(paren) => {
+            let mut paren = paren.clone();
+            paren.elem = Box::new(normalize_swift_type(&paren.elem)?);
+            Ok(Type::Paren(paren))
+        }
+        Type::Group(group) => {
+            let mut group = group.clone();
+            group.elem = Box::new(normalize_swift_type(&group.elem)?);
+            Ok(Type::Group(group))
+        }
+        _ => Ok(ty.clone()),
+    }
+}
+
+fn normalize_swift_type_path(type_path: &TypePath) -> syn::Result<Type> {
+    if type_path.qself.is_none()
+        && type_path.path.leading_colon.is_none()
+        && type_path.path.segments.len() == 1
+    {
+        let segment = type_path.path.segments.first().unwrap();
+        if let Some(mapped) = normalize_single_segment_swift_type(segment)? {
+            return Ok(mapped);
+        }
+    }
+
+    let mut type_path = type_path.clone();
+    for segment in type_path.path.segments.iter_mut() {
+        segment.arguments = normalize_swift_path_arguments(&segment.arguments)?;
+    }
+    Ok(Type::Path(type_path))
+}
+
+fn normalize_single_segment_swift_type(segment: &syn::PathSegment) -> syn::Result<Option<Type>> {
+    let ident = segment.ident.to_string();
+
+    match &segment.arguments {
+        PathArguments::None => {
+            let tokens = match ident.as_str() {
+                "UInt8" => quote! { u8 },
+                "Int8" => quote! { i8 },
+                "UInt16" => quote! { u16 },
+                "Int16" => quote! { i16 },
+                "UInt32" => quote! { u32 },
+                "Int32" => quote! { i32 },
+                "UInt64" => quote! { u64 },
+                "Int64" => quote! { i64 },
+                "UInt" => quote! { usize },
+                "Int" => quote! { isize },
+                "Float" => quote! { f32 },
+                "Double" => quote! { f64 },
+                "Bool" => quote! { bool },
+                "Void" => quote! { () },
+                "RustString" => quote! { String },
+                "RustStringRef" => quote! { &String },
+                "RustStringRefMut" => quote! { &mut String },
+                "RustStr" => quote! { &str },
+                "UnsafeRawPointer" => quote! { *const std::ffi::c_void },
+                "UnsafeMutableRawPointer" => quote! { *mut std::ffi::c_void },
+                _ => return Ok(None),
+            };
+
+            parse_normalized_type(tokens).map(Some)
+        }
+        PathArguments::AngleBracketed(args) => match ident.as_str() {
+            "Optional" => map_swift_generic_type(segment, args, "Option").map(Some),
+            "RustVec" => map_swift_generic_type(segment, args, "Vec").map(Some),
+            "RustResult" => map_swift_generic_type(segment, args, "Result").map(Some),
+            "UnsafePointer" => {
+                let inner = single_generic_type(args, "UnsafePointer")?;
+                let inner = normalize_swift_type(inner)?;
+                parse_normalized_type(quote! { *const #inner }).map(Some)
+            }
+            "UnsafeMutablePointer" => {
+                let inner = single_generic_type(args, "UnsafeMutablePointer")?;
+                let inner = normalize_swift_type(inner)?;
+                parse_normalized_type(quote! { *mut #inner }).map(Some)
+            }
+            _ => Ok(None),
+        },
+        _ => Ok(None),
+    }
+}
+
+fn map_swift_generic_type(
+    segment: &syn::PathSegment,
+    args: &AngleBracketedGenericArguments,
+    rust_ident: &str,
+) -> syn::Result<Type> {
+    let rust_ident = Ident::new(rust_ident, segment.ident.span());
+    let args = normalize_swift_angle_bracketed_args(args)?;
+    parse_normalized_type(quote! { #rust_ident #args })
+}
+
+fn normalize_swift_path_arguments(arguments: &PathArguments) -> syn::Result<PathArguments> {
+    match arguments {
+        PathArguments::None => Ok(PathArguments::None),
+        PathArguments::AngleBracketed(args) => Ok(PathArguments::AngleBracketed(
+            normalize_swift_angle_bracketed_args(args)?,
+        )),
+        PathArguments::Parenthesized(args) => {
+            let mut args = args.clone();
+            for input in args.inputs.iter_mut() {
+                *input = normalize_swift_type(input)?;
+            }
+            args.output = normalize_swift_return_type(args.output)?;
+            Ok(PathArguments::Parenthesized(args))
+        }
+    }
+}
+
+fn normalize_swift_angle_bracketed_args(
+    args: &AngleBracketedGenericArguments,
+) -> syn::Result<AngleBracketedGenericArguments> {
+    let mut args = args.clone();
+
+    for arg in args.args.iter_mut() {
+        match arg {
+            GenericArgument::Type(ty) => {
+                *ty = normalize_swift_type(ty)?;
+            }
+            GenericArgument::Binding(binding) => {
+                binding.ty = normalize_swift_type(&binding.ty)?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(args)
+}
+
+fn single_generic_type<'a>(
+    args: &'a AngleBracketedGenericArguments,
+    swift_type_name: &str,
+) -> syn::Result<&'a Type> {
+    if args.args.len() != 1 {
+        return Err(syn::Error::new_spanned(
+            args,
+            format!("`{swift_type_name}` must have exactly one generic type argument"),
+        ));
+    }
+
+    match args.args.first().unwrap() {
+        GenericArgument::Type(ty) => Ok(ty),
+        arg => Err(syn::Error::new_spanned(
+            arg,
+            format!("`{swift_type_name}` must have a type argument"),
+        )),
+    }
+}
+
+fn parse_normalized_type(tokens: TokenStream) -> syn::Result<Type> {
+    syn::parse2(tokens.clone()).map_err(|_| {
+        syn::Error::new_spanned(
+            tokens,
+            "failed to convert Swift type spelling to a Rust type",
+        )
+    })
 }
 
 enum SwiftFuncParamName {
@@ -590,7 +788,7 @@ mod tests {
         let tokens = quote! {
             extern "Swift" {
                 #[swift_bridge(rust_name = "call_custom")]
-                func!(callCustom(_ value: i32, forKey key: u32) -> u32);
+                func!(callCustom(_ value: Int32, forKey key: UInt32) -> UInt32);
             }
         };
 
@@ -606,6 +804,121 @@ mod tests {
                         #[swift_bridge(label = "_")] value: i32,
                         #[swift_bridge(label = "forKey")] key: u32
                     ) -> u32;
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn normalizes_swift_builtin_types_to_rust_types() {
+        let tokens = quote! {
+            extern "Swift" {
+                func!(
+                    setValues(
+                        _ u8Value: UInt8,
+                        i8Value: Int8,
+                        u16Value: UInt16,
+                        i16Value: Int16,
+                        u32Value: UInt32,
+                        i32Value: Int32,
+                        u64Value: UInt64,
+                        i64Value: Int64,
+                        uintValue: UInt,
+                        intValue: Int,
+                        floatValue: Float,
+                        doubleValue: Double,
+                        boolValue: Bool
+                    ) -> Void
+                );
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    #[swift_bridge(swift_name = "setValues")]
+                    fn set_values(
+                        #[swift_bridge(label = "_")] u8_value: u8,
+                        i8_value: i8,
+                        u16_value: u16,
+                        i16_value: i16,
+                        u32_value: u32,
+                        i32_value: i32,
+                        u64_value: u64,
+                        i64_value: i64,
+                        uint_value: usize,
+                        int_value: isize,
+                        float_value: f32,
+                        double_value: f64,
+                        bool_value: bool
+                    ) -> ();
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn normalizes_swift_bridge_generic_types_to_rust_types() {
+        let tokens = quote! {
+            extern "Swift" {
+                func!(
+                    loadValues(
+                        _ values: RustVec<UInt32>,
+                        maybeEnabled: Optional<Bool>,
+                        result: RustResult<String, SomeError>
+                    ) -> Optional<RustVec<Int32>>
+                );
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    #[swift_bridge(swift_name = "loadValues")]
+                    fn load_values(
+                        #[swift_bridge(label = "_")] values: Vec<u32>,
+                        maybe_enabled: Option<bool>,
+                        result: Result<String, SomeError>
+                    ) -> Option<Vec<i32> >;
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn normalizes_swift_pointer_types_to_rust_types() {
+        let tokens = quote! {
+            extern "Swift" {
+                func!(
+                    readPointers(
+                        _ bytes: UnsafePointer<UInt8>,
+                        output: UnsafeMutablePointer<Int32>,
+                        raw: UnsafeRawPointer,
+                        mutableRaw: UnsafeMutableRawPointer
+                    )
+                );
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    #[swift_bridge(swift_name = "readPointers")]
+                    fn read_pointers(
+                        #[swift_bridge(label = "_")] bytes: *const u8,
+                        output: *mut i32,
+                        raw: *const std::ffi::c_void,
+                        mutable_raw: *mut std::ffi::c_void
+                    );
                 }
             },
         );

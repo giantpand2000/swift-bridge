@@ -2,9 +2,9 @@
 mod ffi {
     extern "Swift" {
         #[swift_bridge(rust_name = "call_custom")]
-        func!(callCustom(_ value: i32, forKey key: u32) -> u32);
+        func!(callCustom(_ value: Int32, forKey key: UInt32) -> UInt32);
 
-        func!(loadURL(_ id: i32));
+        func!(loadURL(_ id: Int32));
     }
 }
 
