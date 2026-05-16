@@ -56,6 +56,16 @@ pub(crate) enum ParseError {
     InvalidModuleItem { item: Item },
     /// The associated_to attribute is used for only an associated method.
     InvalidAssociatedTo { self_: FnArg },
+    /// A `#[swift_bridge(init)]` function did not return the initialized type.
+    InitializerMissingReturnType { fn_ident: Ident },
+    /// A `#[swift_bridge(init)]` function returned a non-initializer type.
+    InitializerInvalidReturnType { fn_ident: Ident, return_ty: Type },
+    /// A `#[swift_bridge(init)]` function's return type disagrees with its associated type.
+    InitializerReturnTypeMismatch {
+        fn_ident: Ident,
+        return_ty: Type,
+        associated_ty: String,
+    },
 }
 
 /// An error while parsing a function attribute.
@@ -208,6 +218,34 @@ struct {struct_name};
                 let message =
                     format!(r#"The associated_to attribute can only be used on static methods."#);
                 Error::new_spanned(self_, message)
+            }
+            ParseError::InitializerMissingReturnType { fn_ident } => {
+                let message = format!(
+                    r#"Initializer function `{}` must return the initialized type."#,
+                    fn_ident
+                );
+                Error::new_spanned(fn_ident, message)
+            }
+            ParseError::InitializerInvalidReturnType {
+                fn_ident,
+                return_ty,
+            } => {
+                let message = format!(
+                    r#"Initializer function `{}` must return an opaque type, `Option<OpaqueType>`, or `Result<OpaqueType, ErrorType>`."#,
+                    fn_ident
+                );
+                Error::new_spanned(return_ty, message)
+            }
+            ParseError::InitializerReturnTypeMismatch {
+                fn_ident,
+                return_ty,
+                associated_ty,
+            } => {
+                let message = format!(
+                    r#"Initializer function `{}` is associated to `{}` and must return `{}`, `Option<{}>`, or `Result<{}, ErrorType>`."#,
+                    fn_ident, associated_ty, associated_ty, associated_ty, associated_ty
+                );
+                Error::new_spanned(return_ty, message)
             }
         }
     }

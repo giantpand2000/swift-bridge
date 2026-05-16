@@ -26,10 +26,6 @@ impl BridgeableType for BridgedString {
         None
     }
 
-    fn as_option(&self) -> Option<&super::bridged_option::BridgedOption> {
-        None
-    }
-
     fn is_passed_via_pointer(&self) -> bool {
         true
     }

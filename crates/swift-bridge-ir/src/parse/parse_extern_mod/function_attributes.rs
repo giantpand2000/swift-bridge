@@ -370,6 +370,145 @@ mod tests {
         assert!(func.is_swift_initializer);
     }
 
+    #[test]
+    fn error_if_initializer_missing_return_type() {
+        let tokens = quote! {
+            mod foo {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(init)]
+                    fn new();
+                }
+            }
+        };
+
+        let errors = parse_errors(tokens);
+        assert_eq!(errors.len(), 1);
+
+        match &errors[0] {
+            ParseError::InitializerMissingReturnType { fn_ident } => {
+                assert_eq!(fn_ident.to_string(), "new");
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn error_if_initializer_returns_non_initializer_type() {
+        let tokens = quote! {
+            mod foo {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(init)]
+                    fn new() -> u8;
+                }
+            }
+        };
+
+        let errors = parse_errors(tokens);
+        assert_eq!(errors.len(), 1);
+
+        match &errors[0] {
+            ParseError::InitializerInvalidReturnType {
+                fn_ident,
+                return_ty,
+            } => {
+                assert_eq!(fn_ident.to_string(), "new");
+                assert_eq!(return_ty.to_token_stream().to_string(), "u8");
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn error_if_initializer_returns_reference_to_initialized_type() {
+        let tokens = quote! {
+            mod foo {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(init)]
+                    fn new() -> &Foo;
+                }
+            }
+        };
+
+        let errors = parse_errors(tokens);
+        assert_eq!(errors.len(), 1);
+
+        match &errors[0] {
+            ParseError::InitializerInvalidReturnType {
+                fn_ident,
+                return_ty,
+            } => {
+                assert_eq!(fn_ident.to_string(), "new");
+                assert_eq!(return_ty.to_token_stream().to_string(), "& Foo");
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn error_if_throwing_initializer_result_is_missing_error_type() {
+        let tokens = quote! {
+            mod foo {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(init)]
+                    fn new() -> Result<Foo>;
+                }
+            }
+        };
+
+        let errors = parse_errors(tokens);
+        assert_eq!(errors.len(), 1);
+
+        match &errors[0] {
+            ParseError::InitializerInvalidReturnType {
+                fn_ident,
+                return_ty,
+            } => {
+                assert_eq!(fn_ident.to_string(), "new");
+                assert_eq!(return_ty.to_token_stream().to_string(), "Result < Foo >");
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn error_if_initializer_return_type_disagrees_with_associated_to() {
+        let tokens = quote! {
+            mod foo {
+                extern "Swift" {
+                    type Foo;
+                    type Bar;
+
+                    #[swift_bridge(associated_to = Foo, init)]
+                    fn new() -> Bar;
+                }
+            }
+        };
+
+        let errors = parse_errors(tokens);
+        assert_eq!(errors.len(), 1);
+
+        match &errors[0] {
+            ParseError::InitializerReturnTypeMismatch {
+                fn_ident,
+                return_ty,
+                associated_ty,
+            } => {
+                assert_eq!(fn_ident.to_string(), "new");
+                assert_eq!(return_ty.to_token_stream().to_string(), "Bar");
+                assert_eq!(associated_ty, "Foo");
+            }
+            _ => panic!(),
+        }
+    }
+
     /// Verify that we push an error if the initialize type is not defined.
     #[test]
     fn error_if_initialized_type_not_defined() {

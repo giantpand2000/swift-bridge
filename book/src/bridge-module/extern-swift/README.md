@@ -106,6 +106,27 @@ and calls Swift as:
 Foo.bar(value)
 ```
 
+Swift initializers can be written as `func!(init(...))`. The generated Rust
+name is `new`, and `swift-bridge` fills in the initializer return type when the
+extern block declares one type.
+
+```rust
+#[swift_bridge::bridge]
+mod ffi {
+    extern "Swift" {
+        type Foo;
+
+        func!(init(_ value: Int64));
+    }
+}
+```
+
+This generates:
+
+```rust
+ffi::Foo::new(value);
+```
+
 Type names in Swift-style declarations can use either `swift-bridge`'s
 Rust-side spelling or the supported Swift-side spelling. Swift spellings are
 normalized before the bridge module is parsed as Rust.

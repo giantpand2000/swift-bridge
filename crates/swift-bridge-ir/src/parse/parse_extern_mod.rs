@@ -18,7 +18,8 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use syn::{
-    FnArg, ForeignItem, ForeignItemFn, GenericParam, ItemForeignMod, LitStr, Pat, ReturnType, Type,
+    FnArg, ForeignItem, ForeignItemFn, GenericArgument, GenericParam, ItemForeignMod, LitStr, Pat,
+    PathArguments, ReturnType, Type,
 };
 
 mod argument_attributes;
@@ -112,19 +113,32 @@ impl<'a> ForeignModParser<'a> {
 
                     let return_type = &func.sig.output;
                     let mut swift_failable_initializer: Option<FailableInitializerType> = None;
+                    let mut initializer_return_type: Option<TypeDeclaration> = None;
+                    let mut initializer_return_type_syn: Option<Type> = None;
+                    let mut initializer_return_type_error = false;
+                    if attributes.is_swift_initializer {
+                        match initializer_return_info(
+                            &func.sig.ident,
+                            return_type,
+                            &self.type_declarations,
+                        ) {
+                            Ok(Some((ty, failable_initializer, return_ty))) => {
+                                initializer_return_type = Some(ty);
+                                swift_failable_initializer = failable_initializer;
+                                initializer_return_type_syn = Some(return_ty);
+                            }
+                            Ok(None) => {}
+                            Err(error) => {
+                                initializer_return_type_error = true;
+                                self.errors.push(error);
+                            }
+                        }
+                    }
                     if let ReturnType::Type(_, return_ty) = return_type {
                         let bridged_return_type =
                             BridgedType::new_with_type(return_ty.deref(), &self.type_declarations);
 
-                        if let Some(ty) = &bridged_return_type {
-                            if ty.as_option().is_some() && attributes.is_swift_initializer {
-                                swift_failable_initializer = Some(FailableInitializerType::Option);
-                            } else if ty.as_result().is_some() && attributes.is_swift_initializer {
-                                swift_failable_initializer =
-                                    Some(FailableInitializerType::Throwing);
-                            }
-                        }
-                        if bridged_return_type.is_none() {
+                        if bridged_return_type.is_none() && !initializer_return_type_error {
                             self.unresolved_types.push(return_ty.deref().clone());
                         }
                     }
@@ -135,8 +149,30 @@ impl<'a> ForeignModParser<'a> {
                         func.clone(),
                         &attributes,
                         &mut local_type_declarations,
-                        swift_failable_initializer.clone(),
+                        initializer_return_type.clone(),
                     )?;
+
+                    if attributes.is_swift_initializer {
+                        if let (
+                            Some(associated_type),
+                            Some(initializer_return_type),
+                            Some(return_ty),
+                        ) = (
+                            associated_type.as_ref(),
+                            initializer_return_type.as_ref(),
+                            initializer_return_type_syn.as_ref(),
+                        ) {
+                            if type_declaration_name(associated_type)
+                                != type_declaration_name(initializer_return_type)
+                            {
+                                self.errors.push(ParseError::InitializerReturnTypeMismatch {
+                                    fn_ident: func.sig.ident.clone(),
+                                    return_ty: return_ty.clone(),
+                                    associated_ty: type_declaration_name(associated_type),
+                                });
+                            }
+                        }
+                    }
 
                     if attributes.is_swift_identifiable {
                         let args = &func.sig.inputs;
@@ -306,7 +342,7 @@ impl<'a> ForeignModParser<'a> {
         func: ForeignItemFn,
         attributes: &FunctionAttributes,
         local_type_declarations: &mut HashMap<String, OpaqueForeignTypeDeclaration>,
-        swift_failable_initializer: Option<FailableInitializerType>,
+        initializer_return_type: Option<TypeDeclaration>,
     ) -> syn::Result<Option<TypeDeclaration>> {
         let associated_type = match first {
             Some(FnArg::Receiver(recv)) => {
@@ -350,7 +386,7 @@ impl<'a> ForeignModParser<'a> {
                             func.clone(),
                             attributes,
                             local_type_declarations,
-                            swift_failable_initializer,
+                            initializer_return_type,
                         )?;
                         associated_type
                     }
@@ -378,46 +414,7 @@ Otherwise we use a more general error that says that your argument is invalid.
                         .unwrap();
                     Some(ty.clone())
                 } else if attributes.is_swift_initializer {
-                    let ty_string = match &func.sig.output {
-                        ReturnType::Default => {
-                            todo!("Push error if initializer does not return a type")
-                        }
-                        ReturnType::Type(_, ty) => {
-                            let ty_string = ty.deref().to_token_stream().to_string();
-                            ty_string
-                        }
-                    };
-                    if swift_failable_initializer.is_some() {
-                        if ty_string.starts_with("Option <") {
-                            // Safety: since we've already checked ty_string is formatted as "Option<~>" before calling this function.
-                            let last_bracket = ty_string.rfind(">").unwrap();
-
-                            let inner = &ty_string[0..last_bracket];
-                            let inner = inner.trim_start_matches("Option < ").trim_end_matches(" ");
-
-                            let ty = self.type_declarations.get(inner);
-                            ty.map(|ty| ty.clone())
-                        } else if ty_string.starts_with("Result <") {
-                            // A , B >
-                            let trimmed = ty_string.trim_start_matches("Result < ");
-                            // A , B
-                            let trimmed = trimmed.trim_end_matches(" >");
-
-                            // [A, B]
-                            let ok_and_err = trimmed.rsplit_once(",").unwrap();
-                            let ok = ok_and_err.0.trim();
-
-                            let ty = self.type_declarations.get(ok);
-
-                            ty.map(|ty| ty.clone())
-                        } else {
-                            unreachable!();
-                        }
-                    } else {
-                        let ty = self.type_declarations.get(&ty_string);
-
-                        ty.map(|ty| ty.clone())
-                    }
+                    initializer_return_type
                 } else {
                     None
                 };
@@ -427,6 +424,114 @@ Otherwise we use a more general error that says that your argument is invalid.
         };
 
         Ok(associated_type)
+    }
+}
+
+fn initializer_return_info(
+    fn_ident: &Ident,
+    return_type: &ReturnType,
+    types: &TypeDeclarations,
+) -> Result<Option<(TypeDeclaration, Option<FailableInitializerType>, Type)>, ParseError> {
+    let return_ty = match return_type {
+        ReturnType::Default => {
+            return Err(ParseError::InitializerMissingReturnType {
+                fn_ident: fn_ident.clone(),
+            })
+        }
+        ReturnType::Type(_, return_ty) => return_ty.deref(),
+    };
+
+    let Some((initialized_ty, failable_initializer)) = initializer_return_type(return_ty) else {
+        return Err(ParseError::InitializerInvalidReturnType {
+            fn_ident: fn_ident.clone(),
+            return_ty: return_ty.clone(),
+        });
+    };
+
+    if let Some(ty) = get_type_declaration_with_type(types, &initialized_ty) {
+        return Ok(Some((ty.clone(), failable_initializer, initialized_ty)));
+    }
+
+    if BridgedType::new_with_type(&initialized_ty, types).is_some() {
+        return Err(ParseError::InitializerInvalidReturnType {
+            fn_ident: fn_ident.clone(),
+            return_ty: initialized_ty,
+        });
+    }
+
+    Ok(None)
+}
+
+fn initializer_return_type(return_ty: &Type) -> Option<(Type, Option<FailableInitializerType>)> {
+    let Type::Path(path) = return_ty else {
+        return Some((return_ty.clone(), None));
+    };
+
+    if path.path.segments.len() != 1 {
+        return Some((return_ty.clone(), None));
+    }
+
+    let segment = path.path.segments.first().unwrap();
+    match segment.ident.to_string().as_str() {
+        "Option" => single_type_arg(&segment.arguments)
+            .map(|ty| (ty, Some(FailableInitializerType::Option))),
+        "Result" => result_ok_type_arg(&segment.arguments)
+            .map(|ty| (ty, Some(FailableInitializerType::Throwing))),
+        _ => Some((return_ty.clone(), None)),
+    }
+}
+
+fn single_type_arg(arguments: &PathArguments) -> Option<Type> {
+    let PathArguments::AngleBracketed(args) = arguments else {
+        return None;
+    };
+
+    if args.args.len() != 1 {
+        return None;
+    }
+
+    match args.args.first().unwrap() {
+        GenericArgument::Type(ty) => Some(ty.clone()),
+        _ => None,
+    }
+}
+
+fn result_ok_type_arg(arguments: &PathArguments) -> Option<Type> {
+    let PathArguments::AngleBracketed(args) = arguments else {
+        return None;
+    };
+
+    if args.args.len() != 2 {
+        return None;
+    }
+
+    match args.args.first()? {
+        GenericArgument::Type(ty) => Some(ty.clone()),
+        _ => None,
+    }
+}
+
+fn get_type_declaration_with_type<'a>(
+    types: &'a TypeDeclarations,
+    ty: &Type,
+) -> Option<&'a TypeDeclaration> {
+    let ty = match ty {
+        Type::Path(path) => path.path.segments.to_token_stream().to_string(),
+        _ => return None,
+    };
+    let ty = ty.replace(' ', "");
+    types.get(&ty)
+}
+
+fn type_declaration_name(ty: &TypeDeclaration) -> String {
+    match ty {
+        TypeDeclaration::Shared(crate::parse::SharedTypeDeclaration::Struct(shared_struct)) => {
+            shared_struct.name.to_string()
+        }
+        TypeDeclaration::Shared(crate::parse::SharedTypeDeclaration::Enum(shared_enum)) => {
+            shared_enum.name.to_string()
+        }
+        TypeDeclaration::Opaque(opaque) => opaque.to_string(),
     }
 }
 

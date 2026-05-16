@@ -297,6 +297,10 @@ impl SwiftFunc {
             return lit_str_to_ident(rust_name);
         }
 
+        if self.swift_name == "init" {
+            return Ok(Ident::new("new", self.swift_name.span()));
+        }
+
         Ok(Ident::new(
             &to_snake_case(&self.swift_name.to_string()),
             self.swift_name.span(),
@@ -334,12 +338,14 @@ impl SwiftFunc {
             params.push(quote! { &self });
         }
         params.extend(self.params.iter().map(SwiftFuncParam::to_rust_param));
-        let output = &self.output;
+        let output = self.output_tokens(context)?;
         let associated_to = self.inferred_associated_to(context)?;
+        let init_attr = self.inferred_init_attr()?;
 
         Ok(quote! {
             #[swift_bridge(swift_name = #swift_name)]
             #associated_to
+            #init_attr
             #(#attrs)*
             #vis #asyncness fn #rust_name(#(#params),*) #output;
         })
@@ -348,6 +354,7 @@ impl SwiftFunc {
     fn should_infer_instance_receiver(&self, context: &ExternSwiftContext) -> syn::Result<bool> {
         Ok(self.kind == SwiftFuncKind::InstanceOrFreestanding
             && context.single_type_name().is_some()
+            && !self.is_swift_initializer()?
             && !self.has_associated_to_attr()?)
     }
 
@@ -355,11 +362,17 @@ impl SwiftFunc {
         &self,
         context: &ExternSwiftContext,
     ) -> syn::Result<Option<TokenStream>> {
-        if self.kind != SwiftFuncKind::Static || self.has_associated_to_attr()? {
+        let is_initializer = self.is_swift_initializer()?;
+        if (self.kind != SwiftFuncKind::Static && !is_initializer)
+            || self.has_associated_to_attr()?
+        {
             return Ok(None);
         }
 
         let Some(type_name) = context.single_type_name() else {
+            if is_initializer {
+                return Ok(None);
+            }
             return Err(syn::Error::new_spanned(
                 &self.swift_name,
                 "`static_func!` requires exactly one `type` declaration in the extern \"Swift\" block, or an explicit `#[swift_bridge(associated_to = Type)]` attribute",
@@ -369,6 +382,48 @@ impl SwiftFunc {
         Ok(Some(quote! {
             #[swift_bridge(associated_to = #type_name)]
         }))
+    }
+
+    fn output_tokens(&self, context: &ExternSwiftContext) -> syn::Result<TokenStream> {
+        if self.is_swift_initializer()? {
+            if let ReturnType::Default = self.output {
+                if let Some(type_name) = context.single_type_name() {
+                    return Ok(quote! { -> #type_name });
+                }
+            }
+        }
+
+        let output = &self.output;
+        Ok(quote! { #output })
+    }
+
+    fn inferred_init_attr(&self) -> syn::Result<Option<TokenStream>> {
+        if self.swift_name == "init" && !self.has_init_attr()? {
+            Ok(Some(quote! {
+                #[swift_bridge(init)]
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn is_swift_initializer(&self) -> syn::Result<bool> {
+        Ok(self.swift_name == "init" || self.has_init_attr()?)
+    }
+
+    fn has_init_attr(&self) -> syn::Result<bool> {
+        for attr in self
+            .attrs
+            .iter()
+            .filter(|attr| attr.path.is_ident("swift_bridge"))
+        {
+            let attrs: FunctionAttributes = attr.parse_args()?;
+            if attrs.is_swift_initializer {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 
     fn has_associated_to_attr(&self) -> syn::Result<bool> {
@@ -978,6 +1033,61 @@ mod tests {
                     #[swift_bridge(swift_name = "bar")]
                     #[swift_bridge(associated_to = Foo)]
                     fn bar(#[swift_bridge(label = "_")] value: i64);
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn normalizes_init_attribute_func_macro_as_associated_initializer() {
+        let tokens = quote! {
+            extern "Swift" {
+                type Foo;
+
+                #[swift_bridge(init)]
+                func!(bar(_ value: Int64));
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(swift_name = "bar")]
+                    #[swift_bridge(associated_to = Foo)]
+                    #[swift_bridge(init)]
+                    fn bar(#[swift_bridge(label = "_")] value: i64) -> Foo;
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn normalizes_init_func_macro_as_initializer() {
+        let tokens = quote! {
+            extern "Swift" {
+                type Foo;
+
+                func!(init(_ value: Int64));
+            }
+        };
+
+        let normalized = normalize_swift_function_syntax(tokens).unwrap();
+
+        assert_tokens_eq(
+            &normalized,
+            &quote! {
+                extern "Swift" {
+                    type Foo;
+
+                    #[swift_bridge(swift_name = "init")]
+                    #[swift_bridge(associated_to = Foo)]
+                    #[swift_bridge(init)]
+                    fn new(#[swift_bridge(label = "_")] value: i64) -> Foo;
                 }
             },
         );

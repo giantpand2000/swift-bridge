@@ -65,10 +65,6 @@ impl BridgeableType for BuiltInTuple {
         todo!();
     }
 
-    fn as_option(&self) -> Option<&super::bridged_option::BridgedOption> {
-        todo!()
-    }
-
     fn is_passed_via_pointer(&self) -> bool {
         todo!();
     }

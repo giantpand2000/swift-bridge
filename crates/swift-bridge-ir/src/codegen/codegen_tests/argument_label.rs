@@ -502,3 +502,64 @@ func __swift_bridge__Foo_bar (_ value: Int64) {
         .test();
     }
 }
+
+/// Verify that Swift-style `init` declarations generate Rust constructors and Swift initializer
+/// wrappers.
+mod extern_swift_init_func_syntax {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            #[swift_bridge::bridge]
+            mod ffi {
+                extern "Swift" {
+                    type Foo;
+
+                    func!(init(_ value: Int64));
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                impl Foo {
+                    pub fn new(value: i64) -> Foo {
+                        unsafe { __swift_bridge__Foo_new(value) }
+                    }
+                }
+            },
+            quote! {
+                #[link_name = "__swift_bridge__$Foo$new"]
+                fn __swift_bridge__Foo_new(value: i64) -> Foo;
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+@_cdecl("__swift_bridge__$Foo$new")
+func __swift_bridge__Foo_new (_ value: Int64) -> UnsafeMutableRawPointer {
+    Unmanaged.passRetained(Foo(value)).toOpaque()
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ExactAfterTrim(r#""#)
+    }
+
+    #[test]
+    fn extern_swift_init_func_syntax() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
