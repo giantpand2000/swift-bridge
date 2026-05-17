@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use syn::Path;
 
 use crate::bridged_type::{BridgeableType, BridgedType, BuiltInResult, TypePosition};
-use crate::codegen::generate_swift::generate_function_swift_calls_rust::gen_func_swift_calls_rust;
+use crate::codegen::generate_swift::generate_function_swift_calls_rust::{
+    gen_func_swift_calls_rust, gen_func_swift_calls_rust_with_struct_refs,
+    has_immutable_opaque_rust_ref_arg,
+};
 use crate::codegen::generate_swift::opaque_copy_type::generate_opaque_copy_struct;
 use crate::codegen::generate_swift::swift_class::generate_swift_class;
 use crate::codegen::generate_swift::vec::generate_vectorizable_extension;
@@ -87,6 +90,19 @@ impl SwiftBridgeModule {
             };
             swift += &func_definition;
             swift += "\n";
+
+            if function.host_lang.is_rust()
+                && function.associated_type.is_none()
+                && can_generate_struct_ref_variant(function, &self.types)
+                && has_immutable_opaque_rust_ref_arg(function, &self.types)
+            {
+                swift += &gen_func_swift_calls_rust_with_struct_refs(
+                    function,
+                    &self.types,
+                    &self.swift_bridge_path,
+                );
+                swift += "\n";
+            }
         }
 
         for ty in self.types.types() {
@@ -815,6 +831,7 @@ struct ClassMethods {
     initializers: Vec<String>,
     owned_self_methods: Vec<String>,
     ref_self_methods: Vec<String>,
+    struct_ref_self_methods: Vec<String>,
     ref_mut_self_methods: Vec<String>,
 }
 
@@ -827,6 +844,7 @@ fn generate_swift_class_methods(
     let mut initializers = vec![];
     let mut owned_self_methods = vec![];
     let mut ref_self_methods = vec![];
+    let mut struct_ref_self_methods = vec![];
     let mut ref_mut_self_methods = vec![];
 
     if let Some(methods) = associated_funcs_and_methods.get(type_name) {
@@ -845,6 +863,15 @@ fn generate_swift_class_methods(
                         ref_mut_self_methods.push(func_definition);
                     } else {
                         ref_self_methods.push(func_definition);
+                        if can_generate_struct_ref_variant(type_method, types) {
+                            let struct_ref_func_definition =
+                                gen_func_swift_calls_rust_with_struct_refs(
+                                    type_method,
+                                    types,
+                                    swift_bridge_path,
+                                );
+                            struct_ref_self_methods.push(struct_ref_func_definition);
+                        }
                     }
                 } else {
                     owned_self_methods.push(func_definition);
@@ -857,8 +884,13 @@ fn generate_swift_class_methods(
         initializers,
         owned_self_methods,
         ref_self_methods,
+        struct_ref_self_methods,
         ref_mut_self_methods,
     }
+}
+
+fn can_generate_struct_ref_variant(function: &ParsedExternFn, types: &TypeDeclarations) -> bool {
+    function.sig.asyncness.is_none() && function.args_filtered_to_boxed_fns(types).is_empty()
 }
 
 /// A Swift protocol that inherits from Swift's `Sendable` protocol.

@@ -689,3 +689,109 @@ typedef struct __swift_bridge__$ResultFooAndSomeErrEnum{__swift_bridge__$ResultF
         .test();
     }
 }
+
+mod extern_rust_type_generates_struct_ref {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    type Foo;
+
+                    fn len(&self) -> usize;
+                    fn borrow(&self) -> &Foo;
+                }
+            }
+        }
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsManyAfterTrim(vec![
+            r#"
+public struct FooStructRef {
+    var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension FooRef {
+    public var structRef: FooStructRef {
+        FooStructRef(ptr: ptr)
+    }
+}
+"#,
+            r#"
+extension FooStructRef {
+    public func len() -> UInt {
+        __swift_bridge__$Foo$len(ptr)
+    }
+
+    public func borrow() -> FooStructRef {
+        FooStructRef(ptr: __swift_bridge__$Foo$borrow(ptr))
+    }
+}
+"#,
+        ])
+    }
+
+    #[test]
+    fn extern_rust_type_generates_struct_ref() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: ExpectedRustTokens::SkipTest,
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: ExpectedCHeader::SkipTest,
+        }
+        .test();
+    }
+}
+
+mod extern_rust_function_generates_struct_ref_overload {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    type Foo;
+
+                    fn use_ref(arg: &Foo, amount: u8) -> usize;
+                    fn borrow_arg(arg: &Foo) -> &Foo;
+                }
+            }
+        }
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsManyAfterTrim(vec![
+            r#"
+public func use_ref(_ arg: FooRef, _ amount: UInt8) -> UInt {
+    __swift_bridge__$use_ref(arg.ptr, amount)
+}
+"#,
+            r#"
+public func use_ref(_ arg: FooStructRef, _ amount: UInt8) -> UInt {
+    __swift_bridge__$use_ref(arg.ptr, amount)
+}
+"#,
+            r#"
+public func borrow_arg(_ arg: FooStructRef) -> FooStructRef {
+    FooStructRef(ptr: __swift_bridge__$borrow_arg(arg.ptr))
+}
+"#,
+        ])
+    }
+
+    #[test]
+    fn extern_rust_function_generates_struct_ref_overload() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: ExpectedRustTokens::SkipTest,
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: ExpectedCHeader::SkipTest,
+        }
+        .test();
+    }
+}

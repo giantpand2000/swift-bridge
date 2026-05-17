@@ -756,6 +756,19 @@ impl OpaqueForeignType {
         }
     }
 
+    pub(crate) fn swift_struct_ref_name(
+        &self,
+        types: &TypeDeclarations,
+        swift_bridge_path: &Path,
+    ) -> String {
+        format!(
+            "{}StructRef{}",
+            self.ty,
+            self.generics
+                .angle_bracketed_generic_concrete_swift_types_string(types, swift_bridge_path)
+        )
+    }
+
     /// The name of the type used to pass a `#[swift_bridge(Copy(...))]` type over FFI
     ///
     /// __swift_bridge__SomeType

@@ -26,6 +26,7 @@ pub(super) fn generate_swift_class(
         &class_methods.initializers,
         &class_methods.owned_self_methods,
         &class_methods.ref_self_methods,
+        &class_methods.struct_ref_self_methods,
         &class_methods.ref_mut_self_methods,
         types,
         swift_bridge_path,
@@ -38,6 +39,7 @@ fn create_class_declaration(
     initializers: &[String],
     owned_self_methods: &[String],
     ref_self_methods: &[String],
+    struct_ref_self_methods: &[String],
     ref_mut_self_methods: &[String],
     types: &TypeDeclarations,
     swift_bridge_path: &Path,
@@ -92,6 +94,25 @@ public class {type_name}Ref{generics} {{
 
     public init(ptr: UnsafeMutableRawPointer) {{
         self.ptr = ptr
+    }}
+}}"#,
+            type_name = type_name,
+            generics = generics
+        )
+    };
+    let mut struct_ref_decl = {
+        format!(
+            r#"
+public struct {type_name}StructRef{generics} {{
+    var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {{
+        self.ptr = ptr
+    }}
+}}
+extension {type_name}Ref {{
+    public var structRef: {type_name}StructRef{generics} {{
+        {type_name}StructRef(ptr: ptr)
     }}
 }}"#,
             type_name = type_name,
@@ -163,6 +184,20 @@ extension {type_name}Ref {{
         )
     };
 
+    let mut struct_ref_instance_methods = if struct_ref_self_methods.len() == 0 {
+        "".to_string()
+    } else {
+        let struct_ref_instance_methods: String = struct_ref_self_methods.join("\n\n");
+        format!(
+            r#"
+extension {type_name}StructRef {{
+{struct_ref_instance_methods}
+}}"#,
+            type_name = type_name,
+            struct_ref_instance_methods = struct_ref_instance_methods
+        )
+    };
+
     let ref_mut_instance_methods = if ref_mut_self_methods.len() == 0 {
         "".to_string()
     } else {
@@ -183,6 +218,8 @@ extension {type_name}RefMut {{
         class_decl = "".to_string();
         class_ref_decl = "".to_string();
         class_ref_mut_decl = "".to_string();
+        struct_ref_decl = "".to_string();
+        struct_ref_instance_methods = "".to_string();
     }
 
     let mut generic_freer = "".to_string();
@@ -236,14 +273,16 @@ extension {ty_name}Ref: Hashable{{
 
     let class = format!(
         r#"
-{class_decl}{initializers}{owned_instance_methods}{class_ref_decl}{ref_mut_instance_methods}{class_ref_mut_decl}{ref_instance_methods}{generic_freer}{equatable_method}{hashable_method}"#,
+{class_decl}{initializers}{owned_instance_methods}{class_ref_decl}{ref_mut_instance_methods}{class_ref_mut_decl}{ref_instance_methods}{struct_ref_decl}{struct_ref_instance_methods}{generic_freer}{equatable_method}{hashable_method}"#,
         class_decl = class_decl,
         class_ref_decl = class_ref_mut_decl,
         class_ref_mut_decl = class_ref_decl,
+        struct_ref_decl = struct_ref_decl,
         initializers = initializers,
         owned_instance_methods = owned_instance_methods,
         ref_mut_instance_methods = ref_mut_instance_methods,
         ref_instance_methods = ref_instance_methods,
+        struct_ref_instance_methods = struct_ref_instance_methods,
         equatable_method = equatable_method,
         hashable_method = hashable_method,
     );
