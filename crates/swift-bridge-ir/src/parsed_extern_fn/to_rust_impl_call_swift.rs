@@ -345,7 +345,7 @@ impl ParsedExternFn {
 
         let mut boxed_fn_support = vec![];
         for (idx, boxed_fn) in self.args_filtered_to_boxed_fns(types) {
-            if boxed_fn.does_not_have_params_or_return() {
+            if boxed_fn.uses_core_no_args_no_return_support() {
                 continue;
             }
 
@@ -390,8 +390,14 @@ impl ParsedExternFn {
             let arg_name = self.arg_name_tokens_at_idx(idx).unwrap();
             let arg_name = Ident::new(&format!("{}_{}", fn_name, arg_name), arg_name.span());
 
-            let call_boxed_fn = quote! {
-                unsafe { Box::from_raw(#arg_name)(#(#call_args),*) }
+            let call_boxed_fn = if boxed_fn.is_fn_once() {
+                quote! {
+                    unsafe { Box::from_raw(#arg_name)(#(#call_args),*) }
+                }
+            } else {
+                quote! {
+                    unsafe { (&*#arg_name)(#(#call_args),*) }
+                }
             };
             let call_boxed_fn = boxed_fn.ret.convert_rust_expression_to_ffi_type(
                 &call_boxed_fn,

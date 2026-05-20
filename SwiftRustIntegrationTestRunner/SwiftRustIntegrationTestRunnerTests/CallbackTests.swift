@@ -14,4 +14,9 @@ class CallbackTests: XCTestCase {
     func testRustCallsSwift() throws {
         test_callbacks_rust_calls_swift()
     }
+
+    /// Run our tests where Swift passes a callback to Rust.
+    func testSwiftCallsRust() throws {
+        swift_calls_rust_callbacks()
+    }
 }

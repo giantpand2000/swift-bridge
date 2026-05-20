@@ -1,4 +1,6 @@
-use crate::bridged_type::{pat_type_pat_is_self, BridgeableType, BridgedType, TypePosition};
+use crate::bridged_type::{
+    pat_type_pat_is_self, BridgeableType, BridgedType, StdLibType, TypePosition,
+};
 use crate::parse::TypeDeclarations;
 use crate::parsed_extern_fn::ParsedExternFn;
 use quote::{format_ident, ToTokens};
@@ -105,33 +107,52 @@ impl ParsedExternFn {
                     let arg = pat.to_token_stream().to_string();
                     let arg_name = arg.clone();
 
-                    let arg =
-                        if let Some(bridged_ty) = BridgedType::new_with_type(&pat_ty.ty, types) {
-                            if self.host_lang.is_rust() {
-                                if bridged_ty.can_be_encoded_with_zero_bytes() {
-                                    continue;
-                                }
+                    let arg = if let Some(bridged_ty) =
+                        BridgedType::new_with_type(&pat_ty.ty, types)
+                    {
+                        if self.host_lang.is_rust() {
+                            if bridged_ty.can_be_encoded_with_zero_bytes() {
+                                continue;
+                            }
 
+                            if let BridgedType::StdLib(StdLibType::BoxedFnOnce(callback)) =
+                                &bridged_ty
+                            {
+                                let maybe_associated_ty = self
+                                    .associated_type
+                                    .as_ref()
+                                    .map(|ty| format!("${}", ty.as_opaque().unwrap().ty))
+                                    .unwrap_or_default();
+                                let class_name = callback.swift_to_rust_callback_class_name(
+                                    &maybe_associated_ty,
+                                    &self.sig.ident.to_string(),
+                                    arg_idx,
+                                );
+                                format!(
+                                    "{{ let callback = {class_name}(callback: {arg}); return Unmanaged.passRetained(callback).toOpaque() }}()"
+                                )
+                            } else {
                                 bridged_ty.convert_swift_expression_to_ffi_type(
                                     &arg,
                                     types,
                                     TypePosition::FnArg(self.host_lang, arg_idx),
                                 )
-                            } else {
-                                if let Some(only) = bridged_ty.only_encoding() {
-                                    only.swift
-                                } else {
-                                    bridged_ty.convert_ffi_value_to_swift_value(
-                                        &arg,
-                                        TypePosition::FnArg(self.host_lang, arg_idx),
-                                        types,
-                                        swift_bridge_path,
-                                    )
-                                }
                             }
                         } else {
-                            todo!("Push to ParsedErrors")
-                        };
+                            if let Some(only) = bridged_ty.only_encoding() {
+                                only.swift
+                            } else {
+                                bridged_ty.convert_ffi_value_to_swift_value(
+                                    &arg,
+                                    TypePosition::FnArg(self.host_lang, arg_idx),
+                                    types,
+                                    swift_bridge_path,
+                                )
+                            }
+                        }
+                    } else {
+                        todo!("Push to ParsedErrors")
+                    };
                     let arg = if include_var_name {
                         if let Some(label) =
                             self.argument_labels.get(&format_ident!("{}", arg_name))

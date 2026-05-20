@@ -1,4 +1,4 @@
-use crate::bridged_type::{pat_type_pat_is_self, BridgeableType, BridgedType};
+use crate::bridged_type::{pat_type_pat_is_self, BridgeableType, BridgedType, StdLibType};
 use crate::parse::{HostLang, TypeDeclaration, TypeDeclarations};
 use crate::parsed_extern_fn::ParsedExternFn;
 use proc_macro2::{Ident, TokenStream};
@@ -55,7 +55,17 @@ impl ParsedExternFn {
                             }
 
                             let pat = &pat_ty.pat;
-                            let ty = built_in.to_ffi_compatible_rust_type(swift_bridge_path, types);
+                            let ty = if self.host_lang.is_rust() {
+                                match &built_in {
+                                    BridgedType::StdLib(StdLibType::BoxedFnOnce(callback)) => {
+                                        callback.to_swift_to_rust_ffi_compatible_rust_type()
+                                    }
+                                    _ => built_in
+                                        .to_ffi_compatible_rust_type(swift_bridge_path, types),
+                                }
+                            } else {
+                                built_in.to_ffi_compatible_rust_type(swift_bridge_path, types)
+                            };
 
                             params.push(quote! { #pat: #ty});
 

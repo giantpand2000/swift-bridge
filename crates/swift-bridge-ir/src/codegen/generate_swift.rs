@@ -37,11 +37,18 @@ impl SwiftBridgeModule {
         let mut associated_funcs_and_methods: HashMap<String, Vec<&ParsedExternFn>> =
             HashMap::new();
         let mut class_protocols: HashMap<String, ClassProtocols> = HashMap::new();
+        let mut swift_callback_support = "".to_string();
 
         let mut has_encountered_at_least_one_sendable_swift_type = false;
 
         for function in &self.functions {
             if function.host_lang.is_rust() {
+                swift_callback_support += &generate_swift_callback_support_for_rust_function(
+                    function,
+                    &self.types,
+                    &self.swift_bridge_path,
+                );
+
                 if let Some(ty) = function.associated_type.as_ref() {
                     match ty {
                         TypeDeclaration::Shared(_) => {
@@ -104,6 +111,8 @@ impl SwiftBridgeModule {
                 swift += "\n";
             }
         }
+
+        swift += &swift_callback_support;
 
         for ty in self.types.types() {
             match ty {
@@ -220,6 +229,93 @@ func {fn_name} (ptr: UnsafeMutableRawPointer) {{
         fn_name = fn_name,
         ty_name = ty.ty_name_ident()
     )
+}
+
+fn generate_swift_callback_support_for_rust_function(
+    func: &ParsedExternFn,
+    types: &TypeDeclarations,
+    swift_bridge_path: &Path,
+) -> String {
+    let mut support = "".to_string();
+    let maybe_associated_ty = func
+        .associated_type
+        .as_ref()
+        .map(|ty| format!("${}", ty.as_opaque().unwrap().ty))
+        .unwrap_or_default();
+    let fn_name = func.sig.ident.to_string();
+
+    for (idx, callback) in func.args_filtered_to_boxed_fns(types) {
+        let class_name =
+            callback.swift_to_rust_callback_class_name(&maybe_associated_ty, &fn_name, idx);
+        let callback_ty = callback.to_swift_closure_type(false, types, swift_bridge_path);
+        let escaping_callback_ty = callback.to_swift_closure_type(true, types, swift_bridge_path);
+
+        let call_link_name = func.swift_callback_call_link_name(idx);
+        let free_link_name = func.swift_callback_free_link_name(idx);
+        let call_fn_name = func.swift_callback_call_fn_ident(idx).to_string();
+        let free_fn_name = func.swift_callback_free_fn_ident(idx).to_string();
+
+        let ffi_params = callback.params_to_swift_ffi_types(types, swift_bridge_path);
+        let maybe_ffi_params = if ffi_params.is_empty() {
+            "".to_string()
+        } else {
+            format!(", {ffi_params}")
+        };
+        let conversions =
+            callback.swift_callback_params_from_ffi_conversions(types, swift_bridge_path);
+        let maybe_conversions = if conversions.is_empty() {
+            "".to_string()
+        } else {
+            format!("{conversions}\n    ")
+        };
+        let call_args = callback.swift_callback_call_args();
+        let callback_call = format!("callback.callback({call_args})");
+
+        let maybe_ret = if callback.ret.is_null() {
+            "".to_string()
+        } else {
+            format!(
+                " -> {}",
+                callback.ret.to_swift_type(
+                    TypePosition::FnReturn(HostLang::Swift),
+                    types,
+                    swift_bridge_path,
+                )
+            )
+        };
+
+        let call_body = if callback.ret.is_null() {
+            format!("{maybe_conversions}{callback_call}")
+        } else {
+            let returned = callback.swift_callback_return("result", types);
+            format!("{maybe_conversions}let result = {callback_call}\n    return {returned}")
+        };
+
+        support += &format!(
+            r#"
+class {class_name} {{
+    let callback: {callback_ty}
+
+    init(callback: {escaping_callback_ty}) {{
+        self.callback = callback
+    }}
+}}
+
+@_cdecl("{call_link_name}")
+func {call_fn_name}(_ ptr: UnsafeMutableRawPointer{maybe_ffi_params}){maybe_ret} {{
+    let callback = Unmanaged<{class_name}>.fromOpaque(ptr).takeUnretainedValue()
+    {call_body}
+}}
+
+@_cdecl("{free_link_name}")
+func {free_fn_name}(_ ptr: UnsafeMutableRawPointer) {{
+    Unmanaged<{class_name}>.fromOpaque(ptr).release()
+}}
+"#
+        );
+    }
+
+    support
 }
 
 fn gen_function_exposes_swift_to_rust(
@@ -618,7 +714,7 @@ fn gen_sync_function_exposes_swift_to_rust(
     };
 
     for (idx, boxed_fn) in func.args_filtered_to_boxed_fns(types) {
-        if boxed_fn.does_not_have_params_or_return() {
+        if boxed_fn.uses_core_no_args_no_return_support() {
             continue;
         }
 
@@ -647,10 +743,13 @@ fn gen_sync_function_exposes_swift_to_rust(
         );
 
         let maybe_generics = boxed_fn.maybe_swift_generics(types);
+        let class_name =
+            boxed_fn.rust_to_swift_callback_class_name(&maybe_associated_ty, &fn_name, idx);
 
-        rust_fn_once_callback_classes += &format!(
-            r#"
-class __private__RustFnOnceCallback{maybe_associated_ty}${fn_name}$param{idx} {{
+        let class_body = if boxed_fn.is_fn_once() {
+            format!(
+                r#"
+class {class_name} {{
     var ptr: UnsafeMutableRawPointer
     var called = false
 
@@ -672,7 +771,29 @@ class __private__RustFnOnceCallback{maybe_associated_ty}${fn_name}$param{idx} {{
         return {ret_value}
     }}
 }}"#
-        );
+            )
+        } else {
+            format!(
+                r#"
+class {class_name} {{
+    var ptr: UnsafeMutableRawPointer
+
+    init(ptr: UnsafeMutableRawPointer) {{
+        self.ptr = ptr
+    }}
+
+    deinit {{
+        __swift_bridge__{maybe_associated_ty}${fn_name}$_free$param{idx}(ptr)
+    }}
+
+    func call{maybe_generics}({params_as_swift}){maybe_ret} {{
+        return {ret_value}
+    }}
+}}"#
+            )
+        };
+
+        rust_fn_once_callback_classes += &class_body;
     }
 
     let callback_initializers =

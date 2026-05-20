@@ -964,6 +964,7 @@ class __private__RustFnOnceCallback$SomeType$some_method$param1 {
         return __swift_bridge__$SomeType$some_method$param1(ptr, arg0)
     }
 }
+
             "#,
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
@@ -985,6 +986,548 @@ void __swift_bridge__$SomeType$some_method$_free$param1(void* some_method_callba
 
     #[test]
     fn test_swift_method_takes_callback_one_primitive_arg() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Swift can pass a closure to an extern Rust function as Box<dyn FnOnce>.
+mod test_rust_takes_fnonce_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    fn rust_takes_fnonce(callback: Box<dyn FnOnce(u8) -> u8>) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                pub extern "C" fn __swift_bridge__rust_takes_fnonce(
+                    callback: *mut std::ffi::c_void
+                ) -> u8
+            },
+            quote! {
+                #[link_name = "__swift_bridge__$rust_takes_fnonce$param0$call"]
+                fn __swift_bridge__rust_takes_fnonce_param0_call(
+                    callback: *mut std::ffi::c_void,
+                    arg0: u8
+                ) -> u8;
+            },
+            quote! {
+                #[link_name = "__swift_bridge__$rust_takes_fnonce$param0$free"]
+                fn __swift_bridge__rust_takes_fnonce_param0_free(
+                    callback: *mut std::ffi::c_void
+                );
+            },
+            quote! {
+                Box::new(move |arg0| {
+                    let __swift_bridge_ret = unsafe {
+                        __swift_bridge__rust_takes_fnonce_param0_call(
+                            __swift_bridge_callback0.ptr(),
+                            arg0
+                        )
+                    };
+                    __swift_bridge_ret
+                }) as Box<dyn FnOnce(u8) -> u8>
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsManyAfterTrim(vec![
+            r#"
+public func rust_takes_fnonce(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
+    __swift_bridge__$rust_takes_fnonce({ let callback = __private__SwiftFnCallback$rust_takes_fnonce$param0(callback: callback); return Unmanaged.passRetained(callback).toOpaque() }())
+}
+"#,
+            r#"
+class __private__SwiftFnCallback$rust_takes_fnonce$param0 {
+    let callback: (UInt8) -> UInt8
+
+    init(callback: @escaping (UInt8) -> UInt8) {
+        self.callback = callback
+    }
+}
+"#,
+            r#"
+@_cdecl("__swift_bridge__$rust_takes_fnonce$param0$call")
+func __swift_bridge__rust_takes_fnonce_param0_call(_ ptr: UnsafeMutableRawPointer, _ arg0: UInt8) -> UInt8 {
+    let callback = Unmanaged<__private__SwiftFnCallback$rust_takes_fnonce$param0>.fromOpaque(ptr).takeUnretainedValue()
+    let arg0 = arg0
+    let result = callback.callback(arg0)
+    return result
+}
+"#,
+            r#"
+@_cdecl("__swift_bridge__$rust_takes_fnonce$param0$free")
+func __swift_bridge__rust_takes_fnonce_param0_free(_ ptr: UnsafeMutableRawPointer) {
+    Unmanaged<__private__SwiftFnCallback$rust_takes_fnonce$param0>.fromOpaque(ptr).release()
+}
+"#,
+        ])
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsAfterTrim(
+            r#"
+uint8_t __swift_bridge__$rust_takes_fnonce(void* callback);
+"#,
+        )
+    }
+
+    #[test]
+    fn test_rust_takes_fnonce_callback_primitive() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Swift can pass a repeatable closure to extern Rust as Box<dyn Fn>.
+mod test_rust_takes_fn_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    fn rust_takes_fn(callback: Box<dyn Fn(u8) -> u8>) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                pub extern "C" fn __swift_bridge__rust_takes_fn(
+                    callback: *mut std::ffi::c_void
+                ) -> u8
+            },
+            quote! {
+                Box::new(move |arg0| {
+                    let __swift_bridge_ret = unsafe {
+                        __swift_bridge__rust_takes_fn_param0_call(
+                            __swift_bridge_callback0.ptr(),
+                            arg0
+                        )
+                    };
+                    __swift_bridge_ret
+                }) as Box<dyn Fn(u8) -> u8>
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsManyAfterTrim(vec![
+            r#"
+public func rust_takes_fn(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
+    __swift_bridge__$rust_takes_fn({ let callback = __private__SwiftFnCallback$rust_takes_fn$param0(callback: callback); return Unmanaged.passRetained(callback).toOpaque() }())
+}
+"#,
+            r#"
+@_cdecl("__swift_bridge__$rust_takes_fn$param0$call")
+func __swift_bridge__rust_takes_fn_param0_call(_ ptr: UnsafeMutableRawPointer, _ arg0: UInt8) -> UInt8 {
+    let callback = Unmanaged<__private__SwiftFnCallback$rust_takes_fn$param0>.fromOpaque(ptr).takeUnretainedValue()
+    let arg0 = arg0
+    let result = callback.callback(arg0)
+    return result
+}
+"#,
+        ])
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsAfterTrim(
+            r#"
+uint8_t __swift_bridge__$rust_takes_fn(void* callback);
+"#,
+        )
+    }
+
+    #[test]
+    fn test_rust_takes_fn_callback_primitive() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Swift can pass a repeatable closure to extern Rust as Arc<dyn Fn>.
+mod test_rust_takes_arc_fn_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    fn rust_takes_arc_fn(callback: Arc<dyn Fn(u8) -> u8>) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                pub extern "C" fn __swift_bridge__rust_takes_arc_fn(
+                    callback: *mut std::ffi::c_void
+                ) -> u8
+            },
+            quote! {
+                std::sync::Arc::new(move |arg0| {
+                    let __swift_bridge_ret = unsafe {
+                        __swift_bridge__rust_takes_arc_fn_param0_call(
+                            __swift_bridge_callback0.ptr(),
+                            arg0
+                        )
+                    };
+                    __swift_bridge_ret
+                }) as std::sync::Arc<dyn Fn(u8) -> u8>
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsManyAfterTrim(vec![
+            r#"
+public func rust_takes_arc_fn(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
+    __swift_bridge__$rust_takes_arc_fn({ let callback = __private__SwiftFnCallback$rust_takes_arc_fn$param0(callback: callback); return Unmanaged.passRetained(callback).toOpaque() }())
+}
+"#,
+            r#"
+@_cdecl("__swift_bridge__$rust_takes_arc_fn$param0$free")
+func __swift_bridge__rust_takes_arc_fn_param0_free(_ ptr: UnsafeMutableRawPointer) {
+    Unmanaged<__private__SwiftFnCallback$rust_takes_arc_fn$param0>.fromOpaque(ptr).release()
+}
+"#,
+        ])
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsAfterTrim(
+            r#"
+uint8_t __swift_bridge__$rust_takes_arc_fn(void* callback);
+"#,
+        )
+    }
+
+    #[test]
+    fn test_rust_takes_arc_fn_callback_primitive() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Swift can pass a Send + Sync + 'static closure to extern Rust as Box<dyn FnOnce>.
+mod test_rust_takes_send_sync_fnonce_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    fn rust_takes_send_sync_fnonce(
+                        callback: Box<dyn FnOnce(u8) -> u8 + Send + Sync + 'static>
+                    ) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                pub extern "C" fn __swift_bridge__rust_takes_send_sync_fnonce(
+                    callback: *mut std::ffi::c_void
+                ) -> u8
+            },
+            quote! {
+                unsafe impl Send for __SwiftBridgeCallbackGuard0 {}
+            },
+            quote! {
+                unsafe impl Sync for __SwiftBridgeCallbackGuard0 {}
+            },
+            quote! {
+                Box::new(move |arg0| {
+                    let __swift_bridge_ret = unsafe {
+                        __swift_bridge__rust_takes_send_sync_fnonce_param0_call(
+                            __swift_bridge_callback0.ptr(),
+                            arg0
+                        )
+                    };
+                    __swift_bridge_ret
+                }) as Box<dyn FnOnce(u8) -> u8 + Send + Sync + 'static>
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+public func rust_takes_send_sync_fnonce(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
+    __swift_bridge__$rust_takes_send_sync_fnonce({ let callback = __private__SwiftFnCallback$rust_takes_send_sync_fnonce$param0(callback: callback); return Unmanaged.passRetained(callback).toOpaque() }())
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsAfterTrim(
+            r#"
+uint8_t __swift_bridge__$rust_takes_send_sync_fnonce(void* callback);
+"#,
+        )
+    }
+
+    #[test]
+    fn test_rust_takes_send_sync_fnonce_callback_primitive() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Swift can pass a Send + Sync + 'static closure to extern Rust as Arc<dyn Fn>.
+mod test_rust_takes_send_sync_arc_fn_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Rust" {
+                    fn rust_takes_send_sync_arc_fn(
+                        callback: Arc<dyn Fn(u8) -> u8 + Send + Sync + 'static>
+                    ) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                unsafe impl Send for __SwiftBridgeCallbackGuard0 {}
+            },
+            quote! {
+                unsafe impl Sync for __SwiftBridgeCallbackGuard0 {}
+            },
+            quote! {
+                std::sync::Arc::new(move |arg0| {
+                    let __swift_bridge_ret = unsafe {
+                        __swift_bridge__rust_takes_send_sync_arc_fn_param0_call(
+                            __swift_bridge_callback0.ptr(),
+                            arg0
+                        )
+                    };
+                    __swift_bridge_ret
+                }) as std::sync::Arc<dyn Fn(u8) -> u8 + Send + Sync + 'static>
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+public func rust_takes_send_sync_arc_fn(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
+    __swift_bridge__$rust_takes_send_sync_arc_fn({ let callback = __private__SwiftFnCallback$rust_takes_send_sync_arc_fn$param0(callback: callback); return Unmanaged.passRetained(callback).toOpaque() }())
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsAfterTrim(
+            r#"
+uint8_t __swift_bridge__$rust_takes_send_sync_arc_fn(void* callback);
+"#,
+        )
+    }
+
+    #[test]
+    fn test_rust_takes_send_sync_arc_fn_callback_primitive() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Rust can pass a repeatable Box<dyn Fn> callback to Swift.
+mod test_swift_takes_fn_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Swift" {
+                    fn swift_takes_fn(callback: Box<dyn Fn(u8) -> u8>) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                pub fn swift_takes_fn(callback: Box<dyn Fn(u8) -> u8>) -> u8 {
+                    unsafe {
+                        __swift_bridge__swift_takes_fn(
+                            Box::into_raw(Box::new(callback)) as *mut Box<dyn Fn(u8) -> u8>
+                        )
+                    }
+                }
+            },
+            quote! {
+                unsafe { (&*swift_takes_fn_callback)(arg0) }
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsManyAfterTrim(vec![
+            r#"
+class __private__RustFnCallback$swift_takes_fn$param0 {
+    var ptr: UnsafeMutableRawPointer
+
+    init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+
+    deinit {
+        __swift_bridge__$swift_takes_fn$_free$param0(ptr)
+    }
+
+    func call(_ arg0: UInt8) -> UInt8 {
+        return __swift_bridge__$swift_takes_fn$param0(ptr, arg0)
+    }
+}
+"#,
+            r#"
+@_cdecl("__swift_bridge__$swift_takes_fn")
+func __swift_bridge__swift_takes_fn (_ callback: UnsafeMutableRawPointer) -> UInt8 {
+    { let cb0 = __private__RustFnCallback$swift_takes_fn$param0(ptr: callback); return swift_takes_fn(callback: { arg0 in cb0.call(arg0) }) }()
+}
+"#,
+        ])
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsManyAfterTrim(vec![
+            r#"
+uint8_t __swift_bridge__$swift_takes_fn$param0(void* swift_takes_fn_callback, uint8_t arg0);
+"#,
+            r#"
+void __swift_bridge__$swift_takes_fn$_free$param0(void* swift_takes_fn_callback);
+"#,
+        ])
+    }
+
+    #[test]
+    fn test_swift_takes_fn_callback_primitive() {
+        CodegenTest {
+            bridge_module: bridge_module_tokens().into(),
+            expected_rust_tokens: expected_rust_tokens(),
+            expected_swift_code: expected_swift_code(),
+            expected_c_header: expected_c_header(),
+        }
+        .test();
+    }
+}
+
+/// Verify Rust APIs preserve Send + Sync + 'static bounds when Rust passes a callback to Swift.
+mod test_swift_takes_send_sync_fn_callback_primitive {
+    use super::*;
+
+    fn bridge_module_tokens() -> TokenStream {
+        quote! {
+            mod ffi {
+                extern "Swift" {
+                    fn swift_takes_send_sync_fn(
+                        callback: Box<dyn Fn(u8) -> u8 + Send + Sync + 'static>
+                    ) -> u8;
+                }
+            }
+        }
+    }
+
+    fn expected_rust_tokens() -> ExpectedRustTokens {
+        ExpectedRustTokens::ContainsMany(vec![
+            quote! {
+                pub fn swift_takes_send_sync_fn(
+                    callback: Box<dyn Fn(u8) -> u8 + Send + Sync + 'static>
+                ) -> u8 {
+                    unsafe {
+                        __swift_bridge__swift_takes_send_sync_fn(
+                            Box::into_raw(Box::new(callback)) as *mut Box<dyn Fn(u8) -> u8 + Send + Sync + 'static>
+                        )
+                    }
+                }
+            },
+            quote! {
+                pub extern "C" fn swift_takes_send_sync_fn_param0(
+                    swift_takes_send_sync_fn_callback: *mut Box<dyn Fn(u8) -> u8 + Send + Sync + 'static>,
+                    arg0: u8
+                ) -> u8
+            },
+        ])
+    }
+
+    fn expected_swift_code() -> ExpectedSwiftCode {
+        ExpectedSwiftCode::ContainsAfterTrim(
+            r#"
+@_cdecl("__swift_bridge__$swift_takes_send_sync_fn")
+func __swift_bridge__swift_takes_send_sync_fn (_ callback: UnsafeMutableRawPointer) -> UInt8 {
+    { let cb0 = __private__RustFnCallback$swift_takes_send_sync_fn$param0(ptr: callback); return swift_takes_send_sync_fn(callback: { arg0 in cb0.call(arg0) }) }()
+}
+"#,
+        )
+    }
+
+    fn expected_c_header() -> ExpectedCHeader {
+        ExpectedCHeader::ContainsManyAfterTrim(vec![
+            r#"
+uint8_t __swift_bridge__$swift_takes_send_sync_fn$param0(void* swift_takes_send_sync_fn_callback, uint8_t arg0);
+"#,
+            r#"
+void __swift_bridge__$swift_takes_send_sync_fn$_free$param0(void* swift_takes_send_sync_fn_callback);
+"#,
+        ])
+    }
+
+    #[test]
+    fn test_swift_takes_send_sync_fn_callback_primitive() {
         CodegenTest {
             bridge_module: bridge_module_tokens().into(),
             expected_rust_tokens: expected_rust_tokens(),

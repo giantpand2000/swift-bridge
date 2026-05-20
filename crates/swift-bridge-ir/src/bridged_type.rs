@@ -844,7 +844,11 @@ impl BridgedType {
             return Some(BridgedType::StdLib(StdLibType::Result(
                 BuiltInResult::from_str_tokens(&tokens, types)?,
             )));
-        } else if tokens.starts_with("Box < dyn FnOnce") {
+        } else if tokens.starts_with("Box < dyn FnOnce")
+            || tokens.starts_with("Box < dyn Fn")
+            || tokens.starts_with("Arc < dyn Fn")
+            || tokens.starts_with("std :: sync :: Arc < dyn Fn")
+        {
             return Some(BridgedType::StdLib(StdLibType::BoxedFnOnce(
                 BridgeableBoxedFnOnce::from_str_tokens(&tokens, types)?,
             )));
@@ -1221,7 +1225,9 @@ impl BridgedType {
                 StdLibType::Result(result) => {
                     result.to_swift_type(type_pos, types, swift_bridge_path)
                 }
-                StdLibType::BoxedFnOnce(boxed_fn) => boxed_fn.to_swift_type().to_string(),
+                StdLibType::BoxedFnOnce(boxed_fn) => {
+                    boxed_fn.to_swift_type(type_pos, types, swift_bridge_path)
+                }
                 StdLibType::Tuple(tuple) => tuple.to_swift_type(type_pos, types, swift_bridge_path),
             },
             BridgedType::Foreign(CustomBridgedType::Shared(SharedType::Struct(shared_struct))) => {

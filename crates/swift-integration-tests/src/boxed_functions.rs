@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 #[swift_bridge::bridge]
 mod ffi {
     extern "Swift" {
@@ -34,23 +36,30 @@ mod ffi {
         ) -> u16;
     }
 
-    // TODO
-    // extern "Rust" {
-    //     fn rust_takes_callback_fnonce_no_args_no_return(arg: Box<dyn FnOnce() -> ()>);
-    //     fn rust_takes_callback_fnonce_primitive(doubling_fn: Box<dyn FnOnce(u8) -> u8>);
-    //     fn rust_takes_callback_fnonce_opaque_rust(
-    //         doubling_fn: Box<dyn FnOnce(CallbackTestOpaqueRustType) -> CallbackTestOpaqueRustType>,
-    //     );
-    //
-    //     fn rust_takes_callback_fnonce_two_params(
-    //         arg: Box<dyn FnOnce(i16, CallbackTestOpaqueRustType)>,
-    //     );
-    //
-    //     fn rust_takes_two_callbacks_fnonce_noop(
-    //         arg1: Box<dyn FnOnce()>,
-    //         arg2: Box<dyn FnOnce() -> ()>,
-    //     );
-    // }
+    extern "Rust" {
+        fn rust_takes_callback_fnonce_no_args_no_return(
+            arg: Box<dyn FnOnce() + Send + Sync + 'static>,
+        );
+        fn rust_takes_callback_fnonce_primitive(doubling_fn: Box<dyn FnOnce(u8) -> u8>) -> u8;
+        fn rust_takes_callback_fn_primitive(
+            doubling_fn: Box<dyn Fn(u8) -> u8 + Send + Sync + 'static>,
+        ) -> u8;
+        fn rust_takes_callback_arc_fn_primitive(
+            doubling_fn: Arc<dyn Fn(u8) -> u8 + Send + Sync + 'static>,
+        ) -> u8;
+        fn rust_takes_callback_fnonce_opaque_rust(
+            doubling_fn: Box<dyn FnOnce(CallbackTestOpaqueRustType) -> CallbackTestOpaqueRustType>,
+        ) -> u32;
+
+        fn rust_takes_callback_fnonce_two_params(
+            arg: Box<dyn FnOnce(i16, CallbackTestOpaqueRustType) -> u32>,
+        ) -> u32;
+
+        fn rust_takes_two_callbacks_fnonce_noop(
+            arg1: Box<dyn FnOnce()>,
+            arg2: Box<dyn FnOnce() -> ()>,
+        );
+    }
 
     extern "Rust" {
         type CallbackTestOpaqueRustType;
@@ -66,30 +75,46 @@ mod ffi {
     }
 }
 
-// TODO
-// fn rust_takes_callback_fnonce_no_args_no_return(arg: Box<dyn FnOnce() -> ()>) {
-//     (arg)()
-// }
-// fn rust_takes_callback_fnonce_primitive(doubling_fn: Box<dyn FnOnce(u8) -> u8>) {
-//     let doubling_fn = (doubling_fn)(2);
-//     assert_eq!(doubled, 4)
-// }
-//
-// fn rust_takes_callback_fnonce_opaque_rust(
-//     doubling_fn: Box<dyn FnOnce(CallbackTestOpaqueRustType) -> CallbackTestOpaqueRustType>,
-// ) {
-//     let start = CallbackTestOpaqueRustType { val: 100 };
-//
-//     let doubled = (doubling_fn)(start);
-//     assert_eq!(doubled.val(), 200);
-// }
-//
-// fn rust_takes_callback_fnonce_two_params(arg: Box<dyn FnOnce(i16, CallbackTestOpaqueRustType)>) {
-//     (arg)(123, CallbackTestOpaqueRustType { val: 222 })
-// }
-// fn rust_takes_two_callbacks_fnonce_noop(arg: Box<dyn FnOnce(i16, CallbackTestOpaqueRustType)>) {
-//     (arg)(123, CallbackTestOpaqueRustType { val: 222 })
-// }
+fn rust_takes_callback_fnonce_no_args_no_return(arg: Box<dyn FnOnce() + Send + Sync + 'static>) {
+    (arg)()
+}
+
+fn rust_takes_callback_fnonce_primitive(doubling_fn: Box<dyn FnOnce(u8) -> u8>) -> u8 {
+    (doubling_fn)(2)
+}
+
+fn rust_takes_callback_fn_primitive(
+    doubling_fn: Box<dyn Fn(u8) -> u8 + Send + Sync + 'static>,
+) -> u8 {
+    (doubling_fn)(2) + (doubling_fn)(3)
+}
+
+fn rust_takes_callback_arc_fn_primitive(
+    doubling_fn: Arc<dyn Fn(u8) -> u8 + Send + Sync + 'static>,
+) -> u8 {
+    let cloned = doubling_fn.clone();
+    (doubling_fn)(2) + (cloned)(3)
+}
+
+fn rust_takes_callback_fnonce_opaque_rust(
+    doubling_fn: Box<dyn FnOnce(CallbackTestOpaqueRustType) -> CallbackTestOpaqueRustType>,
+) -> u32 {
+    let start = CallbackTestOpaqueRustType { val: 100 };
+
+    let doubled = (doubling_fn)(start);
+    doubled.val()
+}
+
+fn rust_takes_callback_fnonce_two_params(
+    arg: Box<dyn FnOnce(i16, CallbackTestOpaqueRustType) -> u32>,
+) -> u32 {
+    (arg)(123, CallbackTestOpaqueRustType { val: 222 })
+}
+
+fn rust_takes_two_callbacks_fnonce_noop(arg1: Box<dyn FnOnce()>, arg2: Box<dyn FnOnce() -> ()>) {
+    (arg1)();
+    (arg2)();
+}
 
 pub struct CallbackTestOpaqueRustType {
     val: u32,

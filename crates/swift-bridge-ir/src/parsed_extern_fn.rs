@@ -267,7 +267,7 @@ impl ParsedExternFn {
     ) -> TokenStream {
         let mut args = vec![];
         let inputs = &self.func.sig.inputs;
-        for fn_arg in inputs.into_iter() {
+        for (arg_idx, fn_arg) in inputs.into_iter().enumerate() {
             match fn_arg {
                 FnArg::Receiver(_receiver) => {
                     if self.host_lang.is_swift() {
@@ -289,7 +289,20 @@ impl ParsedExternFn {
 
                     if let Some(built_in) = BridgedType::new_with_type(&pat_ty.ty, types) {
                         if self.host_lang.is_rust() {
-                            arg = if let Some(repr) = built_in.only_encoding() {
+                            arg = if let BridgedType::StdLib(StdLibType::BoxedFnOnce(callback)) =
+                                &built_in
+                            {
+                                callback.to_rust_closure_expression_from_swift_ffi_value(
+                                    &arg,
+                                    &self.swift_callback_call_link_name(arg_idx),
+                                    &self.swift_callback_free_link_name(arg_idx),
+                                    &self.swift_callback_call_fn_ident(arg_idx),
+                                    &self.swift_callback_free_fn_ident(arg_idx),
+                                    arg_idx,
+                                    swift_bridge_path,
+                                    types,
+                                )
+                            } else if let Some(repr) = built_in.only_encoding() {
                                 repr.rust
                             } else {
                                 built_in.convert_ffi_expression_to_rust_type(
@@ -489,6 +502,24 @@ impl ParsedExternFn {
     pub fn free_boxed_fn_link_name(&self, boxed_fn_idx: usize) -> String {
         format!("{}$_free$param{}", self.link_name(), boxed_fn_idx)
     }
+    pub fn swift_callback_call_link_name(&self, boxed_fn_idx: usize) -> String {
+        format!("{}$param{}$call", self.link_name(), boxed_fn_idx)
+    }
+    pub fn swift_callback_free_link_name(&self, boxed_fn_idx: usize) -> String {
+        format!("{}$param{}$free", self.link_name(), boxed_fn_idx)
+    }
+    pub fn swift_callback_call_fn_ident(&self, boxed_fn_idx: usize) -> Ident {
+        Ident::new(
+            &format!("{}_param{}_call", self.prefixed_fn_name(), boxed_fn_idx),
+            self.func.sig.ident.span(),
+        )
+    }
+    pub fn swift_callback_free_fn_ident(&self, boxed_fn_idx: usize) -> Ident {
+        Ident::new(
+            &format!("{}_param{}_free", self.prefixed_fn_name(), boxed_fn_idx),
+            self.func.sig.ident.span(),
+        )
+    }
 
     /// Generates something like:
     /// void __swift_bridge__$some_function$param0(void* boxed_fn, uint8_t arg);
@@ -586,12 +617,15 @@ void {free_boxed_fn_link_name}(void* {boxed_fn_arg_name});"#
         for (idx, fn_once) in self.args_filtered_to_boxed_fns(types) {
             let arg_name = self.arg_name_at_idx(idx).unwrap();
 
-            if fn_once.params.is_empty() && fn_once.ret.is_null() {
+            if fn_once.uses_core_no_args_no_return_support() {
                 initializers += &format!(
                 "{maybe_space}let cb{idx} = __private__RustFnOnceCallbackNoArgsNoRet(ptr: {arg_name});"
             );
             } else {
-                initializers += &format!("{maybe_space}let cb{idx} = __private__RustFnOnceCallback{maybe_associated_ty}${fn_name}$param{idx}(ptr: {arg_name});");
+                let class_name =
+                    fn_once.rust_to_swift_callback_class_name(maybe_associated_ty, fn_name, idx);
+                initializers +=
+                    &format!("{maybe_space}let cb{idx} = {class_name}(ptr: {arg_name});");
             }
 
             maybe_space = " ";

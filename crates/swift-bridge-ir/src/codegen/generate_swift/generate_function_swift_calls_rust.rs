@@ -522,14 +522,43 @@ fn to_swift_call_args(
                 let arg = pat.to_token_stream().to_string();
                 let arg_name = arg.clone();
 
-                let arg = convert_swift_expression_to_ffi_type(
-                    &pat_ty.ty,
-                    &arg,
-                    TypePosition::FnArg(function.host_lang, arg_idx),
-                    types,
-                    swift_bridge_path,
-                    opaque_ref_repr,
-                );
+                let arg = if function.host_lang.is_rust() {
+                    if let Some(BridgedType::StdLib(StdLibType::BoxedFnOnce(callback))) =
+                        BridgedType::new_with_type(&pat_ty.ty, types)
+                    {
+                        let maybe_associated_ty = function
+                            .associated_type
+                            .as_ref()
+                            .map(|ty| format!("${}", ty.as_opaque().unwrap().ty))
+                            .unwrap_or_default();
+                        let class_name = callback.swift_to_rust_callback_class_name(
+                            &maybe_associated_ty,
+                            &function.sig.ident.to_string(),
+                            arg_idx,
+                        );
+                        format!(
+                            "{{ let callback = {class_name}(callback: {arg}); return Unmanaged.passRetained(callback).toOpaque() }}()"
+                        )
+                    } else {
+                        convert_swift_expression_to_ffi_type(
+                            &pat_ty.ty,
+                            &arg,
+                            TypePosition::FnArg(function.host_lang, arg_idx),
+                            types,
+                            swift_bridge_path,
+                            opaque_ref_repr,
+                        )
+                    }
+                } else {
+                    convert_swift_expression_to_ffi_type(
+                        &pat_ty.ty,
+                        &arg,
+                        TypePosition::FnArg(function.host_lang, arg_idx),
+                        types,
+                        swift_bridge_path,
+                        opaque_ref_repr,
+                    )
+                };
                 let arg = if include_var_name {
                     if let Some(label) =
                         function.argument_labels.get(&format_ident!("{}", arg_name))

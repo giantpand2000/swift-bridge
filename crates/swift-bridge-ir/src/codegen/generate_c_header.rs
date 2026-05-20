@@ -363,7 +363,7 @@ typedef struct {option_ffi_name} {{ bool is_some; {ffi_name} val; }} {option_ffi
             declare_custom_c_ffi_types(func, &self.types, &mut c_ffi_struct_bookkeeping);
             if func.host_lang.is_swift() {
                 for (idx, boxed_fn) in func.args_filtered_to_boxed_fns(&self.types) {
-                    if boxed_fn.params.is_empty() && boxed_fn.ret.is_null() {
+                    if boxed_fn.uses_core_no_args_no_return_support() {
                         continue;
                     }
 
