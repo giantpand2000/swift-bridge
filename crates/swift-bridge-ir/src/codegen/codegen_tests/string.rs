@@ -243,7 +243,7 @@ mod extern_swift_func_returns_string {
     const EXPECTED_SWIFT_CODE: ExpectedSwiftCode = ExpectedSwiftCode::ContainsAfterTrim(
         r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () -> UnsafeMutableRawPointer {
+public func __swift_bridge__some_function () -> UnsafeMutableRawPointer {
     { let rustString = some_function().intoRustString(); rustString.isOwned = false; return rustString.ptr }()
 }
 "#,
@@ -292,7 +292,7 @@ mod extern_swift_func_takes_string_arg {
     const EXPECTED_SWIFT_CODE: ExpectedSwiftCode = ExpectedSwiftCode::ContainsAfterTrim(
         r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ value: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ value: UnsafeMutableRawPointer) {
     some_function(value: RustString(ptr: value))
 }
 "#,

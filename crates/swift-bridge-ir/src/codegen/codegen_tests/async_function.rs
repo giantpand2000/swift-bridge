@@ -1099,7 +1099,7 @@ mod extern_swift_async_function_no_return {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, callback))
     Task {
         let (callbackWrapper, callback) = __callbacks.value
@@ -1177,7 +1177,7 @@ mod extern_swift_async_function_returns_u8 {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt8) -> Void) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt8) -> Void) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, callback))
     Task {
         let (callbackWrapper, callback) = __callbacks.value
@@ -1255,7 +1255,7 @@ mod extern_swift_async_function_with_args {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt8) -> Void, _ arg: UInt32) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt8) -> Void, _ arg: UInt32) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, callback))
     Task {
         let (callbackWrapper, callback) = __callbacks.value
@@ -1343,7 +1343,7 @@ mod extern_swift_async_function_returns_result {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, onSuccess, onError))
     Task {
         let (callbackWrapper, onSuccess, onError) = __callbacks.value
@@ -1439,7 +1439,7 @@ mod extern_swift_async_function_returns_result_with_args {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ arg: UInt32) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ arg: UInt32) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, onSuccess, onError))
     Task {
         let (callbackWrapper, onSuccess, onError) = __callbacks.value
@@ -1533,7 +1533,7 @@ mod extern_swift_async_function_returns_result_void_ok {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, onSuccess, onError))
     Task {
         let (callbackWrapper, onSuccess, onError) = __callbacks.value
@@ -1628,7 +1628,7 @@ mod extern_swift_async_function_returns_result_void_ok_with_args {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ arg: UInt32) {
+public func __swift_bridge__some_function (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ arg: UInt32) {
     let __callbacks = __private__UncheckedSendable((callbackWrapper, onSuccess, onError))
     Task {
         let (callbackWrapper, onSuccess, onError) = __callbacks.value
@@ -1712,7 +1712,7 @@ mod extern_swift_async_method_with_self {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ this: UnsafeMutableRawPointer) {
+public func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ this: UnsafeMutableRawPointer) {
     let __captures = __private__UncheckedSendable((callbackWrapper, callback, this))
     Task {
         let (callbackWrapper, callback, this) = __captures.value
@@ -1791,7 +1791,7 @@ mod extern_swift_async_method_with_self_and_args {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt8) -> Void, _ this: UnsafeMutableRawPointer, _ arg1: UInt32, _ arg2: UnsafeMutableRawPointer) {
+public func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ callback: @escaping @convention(c) (UnsafeMutableRawPointer, UInt8) -> Void, _ this: UnsafeMutableRawPointer, _ arg1: UInt32, _ arg2: UnsafeMutableRawPointer) {
     let __captures = __private__UncheckedSendable((callbackWrapper, callback, this))
     Task {
         let (callbackWrapper, callback, this) = __captures.value
@@ -1880,7 +1880,7 @@ mod extern_swift_async_method_with_self_returns_result {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ this: UnsafeMutableRawPointer, _ arg: UInt32) {
+public func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer, UInt32) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ this: UnsafeMutableRawPointer, _ arg: UInt32) {
     let __captures = __private__UncheckedSendable((callbackWrapper, onSuccess, onError, this))
     Task {
         let (callbackWrapper, onSuccess, onError, this) = __captures.value
@@ -1971,7 +1971,7 @@ mod extern_swift_async_method_with_self_returns_result_void_ok {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ this: UnsafeMutableRawPointer) {
+public func __swift_bridge__SomeType_some_method (_ callbackWrapper: UnsafeMutableRawPointer, _ onSuccess: @escaping @convention(c) (UnsafeMutableRawPointer) -> Void, _ onError: @escaping @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void, _ this: UnsafeMutableRawPointer) {
     let __captures = __private__UncheckedSendable((callbackWrapper, onSuccess, onError, this))
     Task {
         let (callbackWrapper, onSuccess, onError, this) = __captures.value

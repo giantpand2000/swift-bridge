@@ -221,7 +221,7 @@ fn generate_drop_swift_instance_reference_count(ty: &OpaqueForeignTypeDeclaratio
     format!(
         r##"
 @_cdecl("{link_name}")
-func {fn_name} (ptr: UnsafeMutableRawPointer) {{
+public func {fn_name} (ptr: UnsafeMutableRawPointer) {{
     let _ = Unmanaged<{ty_name}>.fromOpaque(ptr).takeRetainedValue()
 }}
 "##,
@@ -302,13 +302,13 @@ class {class_name} {{
 }}
 
 @_cdecl("{call_link_name}")
-func {call_fn_name}(_ ptr: UnsafeMutableRawPointer{maybe_ffi_params}){maybe_ret} {{
+public func {call_fn_name}(_ ptr: UnsafeMutableRawPointer{maybe_ffi_params}){maybe_ret} {{
     let callback = Unmanaged<{class_name}>.fromOpaque(ptr).takeUnretainedValue()
     {call_body}
 }}
 
 @_cdecl("{free_link_name}")
-func {free_fn_name}(_ ptr: UnsafeMutableRawPointer) {{
+public func {free_fn_name}(_ ptr: UnsafeMutableRawPointer) {{
     Unmanaged<{class_name}>.fromOpaque(ptr).release()
 }}
 "#
@@ -622,7 +622,7 @@ func {prefixed_fn_name}__TypedThrowsCheck({checker_params}) async throws({err_sw
 
     format!(
         r#"@_cdecl("{link_name}")
-func {prefixed_fn_name} ({params_str}) {{
+public func {prefixed_fn_name} ({params_str}) {{
     {pre_task_bindings}
     Task {{
         {task_body}
@@ -810,7 +810,7 @@ class {class_name} {{
 
     let generated_func = format!(
         r#"@_cdecl("{link_name}")
-func {prefixed_fn_name} ({params}){ret} {{
+public func {prefixed_fn_name} ({params}){ret} {{
     {call_fn}
 }}{rust_fn_once_callback_classes}
 "#,
@@ -939,7 +939,7 @@ func {prefixed_fn_name}__TypedThrowsCheck({checker_params}) throws({err_swift_ty
 
     format!(
         r#"@_cdecl("{link_name}")
-func {prefixed_fn_name} ({params}) -> {ret_ty} {{
+public func {prefixed_fn_name} ({params}) -> {ret_ty} {{
     {do_block} catch let error {{
         return {err_return}
     }}
@@ -1080,7 +1080,7 @@ public func foo() {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$foo")
-func __swift_bridge__foo () {
+public func __swift_bridge__foo () {
     foo()
 } 
 "#;
@@ -1103,7 +1103,7 @@ func __swift_bridge__foo () {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$foo")
-func __swift_bridge__foo () -> __private__FfiSlice {
+public func __swift_bridge__foo () -> __private__FfiSlice {
     foo().toFfiSlice()
 } 
 "#;
@@ -1127,7 +1127,7 @@ func __swift_bridge__foo () -> __private__FfiSlice {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$MyType$foo")
-func __swift_bridge__MyType_foo (_ this: UnsafeMutableRawPointer) -> __private__FfiSlice {
+public func __swift_bridge__MyType_foo (_ this: UnsafeMutableRawPointer) -> __private__FfiSlice {
     Unmanaged<MyType>.fromOpaque(this).takeUnretainedValue().foo().toFfiSlice()
 }
 "#;
@@ -1218,7 +1218,7 @@ func foo() -> UnsafeBufferPointer<UInt8> {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$Foo$_free")
-func __swift_bridge__Foo__free (ptr: UnsafeMutableRawPointer) {
+public func __swift_bridge__Foo__free (ptr: UnsafeMutableRawPointer) {
     let _ = Unmanaged<Foo>.fromOpaque(ptr).takeRetainedValue()
 }
 "#;
@@ -1245,7 +1245,7 @@ func __swift_bridge__Foo__free (ptr: UnsafeMutableRawPointer) {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$Foo$new")
-func __swift_bridge__Foo_new (_ a: UInt8) -> UnsafeMutableRawPointer {
+public func __swift_bridge__Foo_new (_ a: UInt8) -> UnsafeMutableRawPointer {
     Unmanaged.passRetained(Foo(a: a)).toOpaque()
 }
 "#;
@@ -1352,12 +1352,12 @@ extension Foo {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$Foo$push")
-func __swift_bridge__Foo_push (_ this: UnsafeMutableRawPointer, _ arg: UInt8) {
+public func __swift_bridge__Foo_push (_ this: UnsafeMutableRawPointer, _ arg: UInt8) {
     Unmanaged<Foo>.fromOpaque(this).takeUnretainedValue().push(arg: arg)
 }
 
 @_cdecl("__swift_bridge__$Foo$pop")
-func __swift_bridge__Foo_pop (_ this: UnsafeMutableRawPointer) {
+public func __swift_bridge__Foo_pop (_ this: UnsafeMutableRawPointer) {
     Unmanaged<Foo>.fromOpaque(this).takeUnretainedValue().pop()
 }
 "#;
@@ -1484,7 +1484,7 @@ extension FooRef {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$Foo$bar")
-func __swift_bridge__Foo_bar (_ arg: UInt8) {
+public func __swift_bridge__Foo_bar (_ arg: UInt8) {
     Foo.bar(arg: arg)
 }
 "#;
@@ -1576,7 +1576,7 @@ func void_pointer() -> UnsafeRawPointer {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$void_pointer")
-func __swift_bridge__void_pointer (_ arg: UnsafeRawPointer) {
+public func __swift_bridge__void_pointer (_ arg: UnsafeRawPointer) {
     void_pointer(arg: arg)
 }
 "#;
@@ -1655,7 +1655,7 @@ func some_function() -> Foo {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () {
+public func __swift_bridge__some_function () {
     someFunctionSwiftName()
 }
 "#;
@@ -1681,7 +1681,7 @@ func __swift_bridge__some_function () {
 
         let expected = r#"
 @_cdecl("__swift_bridge__$Foo$bar")
-func __swift_bridge__Foo_bar (_ value: Int64) {
+public func __swift_bridge__Foo_bar (_ value: Int64) {
     Foo.bar(value: value)
 }
 "#;

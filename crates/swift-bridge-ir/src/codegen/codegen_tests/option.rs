@@ -119,7 +119,7 @@ mod extern_swift_fn_option_primitive {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg: __private__OptionU8) -> __private__OptionF32 {
+public func __swift_bridge__some_function (_ arg: __private__OptionU8) -> __private__OptionF32 {
     some_function(arg: arg.intoSwiftRepr()).intoFfiRepr()
 }
 "#,
@@ -453,7 +453,7 @@ mod extern_swift_func_option_string_arg {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg: UnsafeMutableRawPointer?) {
+public func __swift_bridge__some_function (_ arg: UnsafeMutableRawPointer?) {
     some_function(arg: { let val = arg; if val != nil { return RustString(ptr: val!) } else { return nil } }())
 }
 "#,
@@ -513,7 +513,7 @@ mod extern_swift_func_returns_optional_string {
     const EXPECTED_SWIFT_CODE: ExpectedSwiftCode = ExpectedSwiftCode::ContainsAfterTrim(
         r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () -> UnsafeMutableRawPointer? {
+public func __swift_bridge__some_function () -> UnsafeMutableRawPointer? {
     { if let rustString = optionalStringIntoRustString(some_function()) { rustString.isOwned = false; return rustString.ptr } else { return nil } }()
 }
 "#,
@@ -573,7 +573,7 @@ mod extern_swift_func_option_str_arg {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg: RustStr) {
+public func __swift_bridge__some_function (_ arg: RustStr) {
     some_function(arg: { let val = arg; if val.start != nil { return val; } else { return nil; } }())
 }
 "#,

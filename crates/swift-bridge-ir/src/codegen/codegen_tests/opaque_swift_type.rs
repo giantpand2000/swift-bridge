@@ -46,7 +46,7 @@ mod extern_swift_freestanding_fn_with_owned_opaque_swift_type_arg {
     const EXPECTED_SWIFT_CODE: ExpectedSwiftCode = ExpectedSwiftCode::ContainsAfterTrim(
         r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ arg: UnsafeMutableRawPointer) {
     some_function(arg: Unmanaged<MyType>.fromOpaque(arg).takeRetainedValue())
 }
 "#,
@@ -101,7 +101,7 @@ mod test_extern_swift_freestanding_function_owned_opaque_swift_type_return {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () -> UnsafeMutableRawPointer {
+public func __swift_bridge__some_function () -> UnsafeMutableRawPointer {
     Unmanaged.passRetained(some_function()).toOpaque()
 }
 "#,
@@ -161,7 +161,7 @@ mod test_extern_swift_method_owned_opaque_swift_type_return {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
+public func __swift_bridge__SomeType_some_method (_ this: UnsafeMutableRawPointer) -> UnsafeMutableRawPointer {
     Unmanaged.passRetained(Unmanaged<SomeType>.fromOpaque(this).takeUnretainedValue().some_method()).toOpaque()
 }
 "#,

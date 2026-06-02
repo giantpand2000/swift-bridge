@@ -55,7 +55,7 @@ mod test_swift_takes_no_args_no_return_callback {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallbackNoArgsNoRet(ptr: callback); let _ = some_function(callback: { cb0.call() }) }()
 }
 "#,
@@ -149,7 +149,7 @@ class __private__RustFnOnceCallback$some_function$param0 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallback$some_function$param0(ptr: callback); let _ = some_function(callback: { arg0 in cb0.call(arg0) }) }()
 }
 "#,
@@ -248,7 +248,7 @@ class __private__RustFnOnceCallback$some_function$param0 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallback$some_function$param0(ptr: callback); let _ = some_function(callback: { cb0.call() }) }()
 }
 "#,
@@ -351,7 +351,7 @@ class __private__RustFnOnceCallback$some_function$param0 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallback$some_function$param0(ptr: callback); let _ = some_function(callback: { arg0 in cb0.call(arg0) }) }()
 }
 "#,
@@ -457,7 +457,7 @@ class __private__RustFnOnceCallback$some_function$param0 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallback$some_function$param0(ptr: callback); let _ = some_function(callback: { cb0.call() }) }()
 }
 "#,
@@ -566,7 +566,7 @@ class __private__RustFnOnceCallback$some_function$param0 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallback$some_function$param0(ptr: callback); let _ = some_function(callback: { arg0 in cb0.call(arg0) }) }()
 }
 "#,
@@ -690,7 +690,7 @@ class __private__RustFnOnceCallback$some_function$param1 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg0: UnsafeMutableRawPointer, _ arg1: UnsafeMutableRawPointer, _ arg2: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ arg0: UnsafeMutableRawPointer, _ arg1: UnsafeMutableRawPointer, _ arg2: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallbackNoArgsNoRet(ptr: arg0); let cb1 = __private__RustFnOnceCallback$some_function$param1(ptr: arg1); let cb2 = __private__RustFnOnceCallbackNoArgsNoRet(ptr: arg2); let _ = some_function(arg0: { cb0.call() }, arg1: { arg0 in cb1.call(arg0) }, arg2: { cb2.call() }) }()
 }
 "#,
@@ -793,7 +793,7 @@ class __private__RustFnOnceCallback$some_function$param0 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__some_function (_ callback: UnsafeMutableRawPointer) {
     { let cb0 = __private__RustFnOnceCallback$some_function$param0(ptr: callback); let _ = some_function(callback: { arg0, arg1 in cb0.call(arg0, arg1) }) }()
 }
 "#,
@@ -865,7 +865,7 @@ mod test_swift_method_takes_no_args_no_return_callback {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ this: UnsafeMutableRawPointer, _ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__SomeType_some_method (_ this: UnsafeMutableRawPointer, _ callback: UnsafeMutableRawPointer) {
     { let cb1 = __private__RustFnOnceCallbackNoArgsNoRet(ptr: callback); let _ = Unmanaged<SomeType>.fromOpaque(this).takeUnretainedValue().some_method(callback: { cb1.call() }) }()
 }
 "#,
@@ -968,7 +968,7 @@ class __private__RustFnOnceCallback$SomeType$some_method$param1 {
             "#,
             r#"
 @_cdecl("__swift_bridge__$SomeType$some_method")
-func __swift_bridge__SomeType_some_method (_ this: UnsafeMutableRawPointer, _ callback: UnsafeMutableRawPointer) {
+public func __swift_bridge__SomeType_some_method (_ this: UnsafeMutableRawPointer, _ callback: UnsafeMutableRawPointer) {
     { let cb1 = __private__RustFnOnceCallback$SomeType$some_method$param1(ptr: callback); let _ = Unmanaged<SomeType>.fromOpaque(this).takeUnretainedValue().some_method(callback: { arg0 in cb1.call(arg0) }) }()
 }
 "#,
@@ -1062,7 +1062,7 @@ class __private__SwiftFnCallback$rust_takes_fnonce$param0 {
 "#,
             r#"
 @_cdecl("__swift_bridge__$rust_takes_fnonce$param0$call")
-func __swift_bridge__rust_takes_fnonce_param0_call(_ ptr: UnsafeMutableRawPointer, _ arg0: UInt8) -> UInt8 {
+public func __swift_bridge__rust_takes_fnonce_param0_call(_ ptr: UnsafeMutableRawPointer, _ arg0: UInt8) -> UInt8 {
     let callback = Unmanaged<__private__SwiftFnCallback$rust_takes_fnonce$param0>.fromOpaque(ptr).takeUnretainedValue()
     let arg0 = arg0
     let result = callback.callback(arg0)
@@ -1071,7 +1071,7 @@ func __swift_bridge__rust_takes_fnonce_param0_call(_ ptr: UnsafeMutableRawPointe
 "#,
             r#"
 @_cdecl("__swift_bridge__$rust_takes_fnonce$param0$free")
-func __swift_bridge__rust_takes_fnonce_param0_free(_ ptr: UnsafeMutableRawPointer) {
+public func __swift_bridge__rust_takes_fnonce_param0_free(_ ptr: UnsafeMutableRawPointer) {
     Unmanaged<__private__SwiftFnCallback$rust_takes_fnonce$param0>.fromOpaque(ptr).release()
 }
 "#,
@@ -1142,7 +1142,7 @@ public func rust_takes_fn(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
 "#,
             r#"
 @_cdecl("__swift_bridge__$rust_takes_fn$param0$call")
-func __swift_bridge__rust_takes_fn_param0_call(_ ptr: UnsafeMutableRawPointer, _ arg0: UInt8) -> UInt8 {
+public func __swift_bridge__rust_takes_fn_param0_call(_ ptr: UnsafeMutableRawPointer, _ arg0: UInt8) -> UInt8 {
     let callback = Unmanaged<__private__SwiftFnCallback$rust_takes_fn$param0>.fromOpaque(ptr).takeUnretainedValue()
     let arg0 = arg0
     let result = callback.callback(arg0)
@@ -1216,7 +1216,7 @@ public func rust_takes_arc_fn(_ callback: @escaping (UInt8) -> UInt8) -> UInt8 {
 "#,
             r#"
 @_cdecl("__swift_bridge__$rust_takes_arc_fn$param0$free")
-func __swift_bridge__rust_takes_arc_fn_param0_free(_ ptr: UnsafeMutableRawPointer) {
+public func __swift_bridge__rust_takes_arc_fn_param0_free(_ ptr: UnsafeMutableRawPointer) {
     Unmanaged<__private__SwiftFnCallback$rust_takes_arc_fn$param0>.fromOpaque(ptr).release()
 }
 "#,
@@ -1436,7 +1436,7 @@ class __private__RustFnCallback$swift_takes_fn$param0 {
 "#,
             r#"
 @_cdecl("__swift_bridge__$swift_takes_fn")
-func __swift_bridge__swift_takes_fn (_ callback: UnsafeMutableRawPointer) -> UInt8 {
+public func __swift_bridge__swift_takes_fn (_ callback: UnsafeMutableRawPointer) -> UInt8 {
     { let cb0 = __private__RustFnCallback$swift_takes_fn$param0(ptr: callback); return swift_takes_fn(callback: { arg0 in cb0.call(arg0) }) }()
 }
 "#,
@@ -1508,7 +1508,7 @@ mod test_swift_takes_send_sync_fn_callback_primitive {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$swift_takes_send_sync_fn")
-func __swift_bridge__swift_takes_send_sync_fn (_ callback: UnsafeMutableRawPointer) -> UInt8 {
+public func __swift_bridge__swift_takes_send_sync_fn (_ callback: UnsafeMutableRawPointer) -> UInt8 {
     { let cb0 = __private__RustFnCallback$swift_takes_send_sync_fn$param0(ptr: callback); return swift_takes_send_sync_fn(callback: { arg0 in cb0.call(arg0) }) }()
 }
 "#,

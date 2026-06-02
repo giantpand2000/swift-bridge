@@ -885,7 +885,7 @@ mod extern_swift_fn_return_result_string {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () -> __swift_bridge__$ResultStringAndSomeError {
+public func __swift_bridge__some_function () -> __swift_bridge__$ResultStringAndSomeError {
     do {
         let result = try some_function()
         return __swift_bridge__$ResultStringAndSomeError(tag: __swift_bridge__$ResultStringAndSomeError$ResultOk, payload: __swift_bridge__$ResultStringAndSomeError$Fields(ok: { let rustString = result.intoRustString(); rustString.isOwned = false; return rustString.ptr }()))
@@ -954,7 +954,7 @@ mod extern_swift_fn_return_result_u32 {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () -> __swift_bridge__$ResultU32AndSomeError {
+public func __swift_bridge__some_function () -> __swift_bridge__$ResultU32AndSomeError {
     do {
         let result = try some_function()
         return __swift_bridge__$ResultU32AndSomeError(tag: __swift_bridge__$ResultU32AndSomeError$ResultOk, payload: __swift_bridge__$ResultU32AndSomeError$Fields(ok: result))
@@ -1022,7 +1022,7 @@ mod extern_swift_fn_return_result_void_shared_enum {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ success: Bool) -> __swift_bridge__$ResultVoidAndSomeError {
+public func __swift_bridge__some_function (_ success: Bool) -> __swift_bridge__$ResultVoidAndSomeError {
     do {
         try some_function(success: success)
         return __swift_bridge__$ResultVoidAndSomeError(tag: __swift_bridge__$ResultVoidAndSomeError$ResultOk, payload: __swift_bridge__$ResultVoidAndSomeError$Fields())
@@ -1088,7 +1088,7 @@ mod extern_swift_fn_return_result_void_opaque_rust {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function () -> UnsafeMutableRawPointer? {
+public func __swift_bridge__some_function () -> UnsafeMutableRawPointer? {
     do {
         try some_function()
         return nil
@@ -1154,7 +1154,7 @@ mod extern_swift_fn_return_result_with_args {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg: UInt32) -> UnsafeMutableRawPointer? {
+public func __swift_bridge__some_function (_ arg: UInt32) -> UnsafeMutableRawPointer? {
     do {
         try some_function(arg: arg)
         return nil
@@ -1220,7 +1220,7 @@ mod extern_swift_fn_return_result_opaque_both {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ success: Bool) -> __private__ResultPtrAndPtr {
+public func __swift_bridge__some_function (_ success: Bool) -> __private__ResultPtrAndPtr {
     do {
         let result = try some_function(success: success)
         return __private__ResultPtrAndPtr(is_ok: true, ok_or_err: {result.isOwned = false; return result.ptr;}())

@@ -147,7 +147,7 @@ mod extern_swift_argument_label_underscore {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg1: Int32, _ arg2: UInt32) {
+public func __swift_bridge__some_function (_ arg1: Int32, _ arg2: UInt32) {
     some_function(arg1, arg2)
 }
 "#,
@@ -201,7 +201,7 @@ mod extern_swift_argument_label_custom {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (firstArg arg1: Int32, secondArg arg2: UInt32) {
+public func __swift_bridge__some_function (firstArg arg1: Int32, secondArg arg2: UInt32) {
     some_function(firstArg: arg1, secondArg: arg2)
 }
 "#,
@@ -256,7 +256,7 @@ mod extern_swift_argument_label_mixed {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ arg3: Int64) {
+public func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ arg3: Int64) {
     some_function(arg1, customLabel: arg2, arg3: arg3)
 }
 "#,
@@ -307,7 +307,7 @@ mod extern_swift_func_syntax {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$some_function")
-func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ arg3: Int64) {
+public func __swift_bridge__some_function (_ arg1: Int32, customLabel arg2: UInt32, _ arg3: Int64) {
     someFunction(arg1, customLabel: arg2, arg3: arg3)
 }
 "#,
@@ -359,7 +359,7 @@ mod extern_swift_func_syntax_rust_name {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$call_custom")
-func __swift_bridge__call_custom (_ value: Int32, forKey key: UInt32) {
+public func __swift_bridge__call_custom (_ value: Int32, forKey key: UInt32) {
     callCustom(value, forKey: key)
 }
 "#,
@@ -420,7 +420,7 @@ mod extern_swift_func_syntax_instance_method {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$Foo$bar")
-func __swift_bridge__Foo_bar (_ this: UnsafeMutableRawPointer, _ value: Int64) {
+public func __swift_bridge__Foo_bar (_ this: UnsafeMutableRawPointer, _ value: Int64) {
     Unmanaged<Foo>.fromOpaque(this).takeUnretainedValue().bar(value)
 }
 "#,
@@ -480,7 +480,7 @@ mod extern_swift_static_func_syntax {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$Foo$bar")
-func __swift_bridge__Foo_bar (_ value: Int64) {
+public func __swift_bridge__Foo_bar (_ value: Int64) {
     Foo.bar(value)
 }
 "#,
@@ -541,7 +541,7 @@ mod extern_swift_init_func_syntax {
         ExpectedSwiftCode::ContainsAfterTrim(
             r#"
 @_cdecl("__swift_bridge__$Foo$new")
-func __swift_bridge__Foo_new (_ value: Int64) -> UnsafeMutableRawPointer {
+public func __swift_bridge__Foo_new (_ value: Int64) -> UnsafeMutableRawPointer {
     Unmanaged.passRetained(Foo(value)).toOpaque()
 }
 "#,
